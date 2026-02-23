@@ -1,0 +1,34 @@
+{
+  "tracks": [
+    {
+      "id": "baselwavez",
+      "dataFile": "data/baselwavez.json",
+      "title": "BaselWavez",
+      "artist": "BetterCallZaal",
+      "bpm": null,
+      "key": null,
+      "duration": 85,
+      "genre": "Electronic"
+    },
+    {
+      "id": "example",
+      "dataFile": "data/example.json",
+      "title": "Example DJ Mix",
+      "artist": "DJ Example",
+      "bpm": 128,
+      "key": null,
+      "duration": 3600,
+      "genre": "House / Techno"
+    },
+    {
+      "id": "wavewarz",
+      "dataFile": "data/wavewarz.json",
+      "title": "WaveWarZ",
+      "artist": "BetterCallZaal",
+      "bpm": null,
+      "key": null,
+      "duration": 179,
+      "genre": "Electronic"
+    }
+  ]
+}

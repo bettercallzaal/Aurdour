@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURDOUR DJ</title>
+    <meta name="description" content="Professional two-deck DJ platform with mixing, effects, and streaming">
+    <meta property="og:title" content="AURDOUR DJ">
+    <meta property="og:type" content="music.song">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#00d4ff">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="dj-app">
+
+        <!-- ===== TOP BAR ===== -->
+        <header class="top-bar">
+            <div class="logo">AURDOUR <span class="logo-accent">DJ</span></div>
+
+            <div class="toolbar-group">
+                <!-- Recording -->
+                <button class="btn-toolbar" id="rec-btn" title="Record mix (R)">REC</button>
+                <span class="toolbar-text" id="rec-time">0:00</span>
+                <select class="toolbar-select" id="rec-format" title="Recording format">
+                    <option value="webm">WebM</option>
+                    <option value="ogg">OGG</option>
+                    <option value="mp4">M4A</option>
+                </select>
+
+                <!-- Visualizer -->
+                <button class="btn-toolbar" id="viz-toggle" title="Toggle visualizer (V)">VIZ</button>
+                <button class="btn-toolbar btn-sm" id="viz-mode" title="Visualizer mode">BARS</button>
+
+                <!-- Live -->
+                <button class="btn-toolbar" id="live-toggle" title="Go live">GO LIVE</button>
+
+                <!-- Auto Transition -->
+                <button class="btn-toolbar" id="auto-trans-btn" title="Auto crossfade transition">AUTO</button>
+                <select class="toolbar-select" id="auto-trans-duration" title="Transition duration">
+                    <option value="4">4s</option>
+                    <option value="8" selected>8s</option>
+                    <option value="16">16s</option>
+                    <option value="32">32s</option>
+                </select>
+                <select class="toolbar-select" id="auto-trans-curve" title="Transition curve">
+                    <option value="equal-power">S-Curve</option>
+                    <option value="linear">Linear</option>
+                    <option value="cut">Cut</option>
+                </select>
+            </div>
+
+            <div class="toolbar-group">
+                <!-- BPM Tap -->
+                <button class="btn-toolbar" id="bpm-tap-btn" title="Tap BPM (T)">TAP</button>
+                <span class="toolbar-text mono" id="bpm-tap-display">--- BPM</span>
+                <button class="btn-toolbar btn-sm" id="bpm-tap-reset" title="Reset BPM">RST</button>
+            </div>
+
+            <div class="toolbar-group">
+                <!-- MIDI -->
+                <span class="toolbar-label">MIDI</span>
+                <span class="toolbar-text" id="midi-status">--</span>
+                <span id="midi-devices"></span>
+                <button class="btn-toolbar btn-sm" id="midi-learn" title="MIDI learn">LEARN</button>
+            </div>
+
+            <div class="toolbar-group">
+                <!-- RGB / Quantize -->
+                <button class="btn-toolbar btn-sm" id="rgb-toggle" title="RGB waveform">RGB</button>
+                <button class="btn-toolbar btn-sm" id="quantize-toggle" title="Quantize to beat grid">QTZ</button>
+            </div>
+
+            <div class="toolbar-group">
+                <!-- Performance Monitor -->
+                <span class="toolbar-label">PERF</span>
+                <span class="toolbar-text mono" id="perf-latency">--ms</span>
+                <span class="toolbar-text mono" id="perf-cpu">--%</span>
+                <span class="toolbar-text mono" id="perf-buffer">--</span>
+            </div>
+
+            <div class="toolbar-group">
+                <!-- Flow Mode -->
+                <button class="btn-toolbar" id="flow-toggle-btn" title="Flow Mode — Auto-DJ for easy mixing">FLOW</button>
+            </div>
+
+            <div class="toolbar-group">
+                <!-- Settings -->
+                <button class="btn-toolbar btn-sm" id="settings-btn" title="Settings">SETTINGS</button>
+            </div>
+
+            <div class="master-section">
+                <label class="master-label">BOOTH</label>
+                <input type="range" id="booth-volume" min="0" max="100" value="80" class="master-slider" title="Booth output volume">
+                <label class="master-label">MASTER</label>
+                <input type="range" id="master-volume" min="0" max="100" value="80" class="master-slider">
+                <canvas id="master-meter" width="200" height="16"></canvas>
+            </div>
+        </header>
+
+        <!-- Visualizer Canvas (fullscreen behind decks) -->
+        <canvas id="visualizer" class="visualizer hidden"></canvas>
+
+        <!-- Reactions overlay -->
+        <div id="reactions-container" class="reactions-container"></div>
+
+        <!-- Chat panel (collapsible) -->
+        <div class="chat-panel hidden" id="chat-panel">
+            <div class="chat-header">
+                <span>CHAT</span>
+                <button class="btn-toolbar btn-sm" id="chat-close">X</button>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-requests" id="requests-list"></div>
+        </div>
+
+        <!-- ===== DECKS ROW ===== -->
+        <div class="decks-row">
+
+            <!-- ===== DECK A ===== -->
+            <section class="deck deck-a" id="deck-a">
+                <div class="deck-header">
+                    <span class="deck-label deck-label-a">A</span>
+                    <div class="track-info">
+                        <div class="track-title" id="deck-a-title">No Track Loaded</div>
+                        <div class="track-artist" id="deck-a-artist"></div>
+                    </div>
+                    <div class="track-meta">
+                        <span class="bpm-display" id="deck-a-bpm">--- BPM</span>
+                        <div class="key-row">
+                            <span class="key-display" id="deck-a-key">--</span>
+                            <span class="camelot-display" id="deck-a-camelot"></span>
+                            <span class="compat-badge" id="deck-a-compat" style="display:none"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="time-row">
+                    <span class="time-elapsed" id="deck-a-elapsed">0:00.0</span>
+                    <span class="time-remaining" id="deck-a-remaining">-0:00.0</span>
+                </div>
+                <div class="waveform-overview" id="deck-a-overview"></div>
+                <div class="waveform-main" id="deck-a-waveform"></div>
+
+                <!-- Pitch fader row -->
+                <div class="pitch-row">
+                    <button class="btn-mini" id="keylock-a" title="Key Lock">KEY</button>
+                    <button class="btn-mini" id="slip-a" title="Slip Mode">SLIP</button>
+                    <input type="range" id="pitch-a" class="pitch-fader" min="-8" max="8" value="0" step="0.1">
+                    <span class="pitch-display" id="pitch-a-display">0.0%</span>
+                    <select class="toolbar-select" id="pitch-range-a" title="Pitch range">
+                        <option value="8">±8%</option>
+                        <option value="16">±16%</option>
+                        <option value="50">±50%</option>
+                    </select>
+                </div>
+
+                <div class="transport-controls">
+                    <button class="btn-transport btn-cue" id="deck-a-cue">CUE</button>
+                    <button class="btn-transport btn-play" id="deck-a-play">
+                        <svg class="icon-play" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <svg class="icon-pause hidden" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+                    </button>
+                    <button class="btn-transport btn-sync" id="deck-a-sync">SYNC</button>
+                </div>
+
+                <!-- Loop controls -->
+                <div class="loop-controls">
+                    <button class="btn-mini loop-btn" id="loop-a-in">IN</button>
+                    <button class="btn-mini loop-btn" id="loop-a-out">OUT</button>
+                    <button class="btn-mini loop-btn" id="loop-a-toggle">LOOP</button>
+                    <button class="btn-mini loop-btn" id="loop-a-halve">½</button>
+                    <button class="btn-mini loop-btn" id="loop-a-double">×2</button>
+                    <div class="auto-loop-btns">
+                        <button class="btn-mini auto-loop" data-beats="1">1</button>
+                        <button class="btn-mini auto-loop" data-beats="2">2</button>
+                        <button class="btn-mini auto-loop" data-beats="4">4</button>
+                        <button class="btn-mini auto-loop" data-beats="8">8</button>
+                        <button class="btn-mini auto-loop" data-beats="16">16</button>
+                    </div>
+                </div>
+
+                <!-- Hot cue pads -->
+                <div class="hot-cue-pads" id="deck-a-pads">
+                    <button class="cue-pad" data-pad="0">1</button>
+                    <button class="cue-pad" data-pad="1">2</button>
+                    <button class="cue-pad" data-pad="2">3</button>
+                    <button class="cue-pad" data-pad="3">4</button>
+                    <button class="cue-pad" data-pad="4">5</button>
+                    <button class="cue-pad" data-pad="5">6</button>
+                    <button class="cue-pad" data-pad="6">7</button>
+                    <button class="cue-pad" data-pad="7">8</button>
+                </div>
+
+                <!-- FX Section -->
+                <div class="fx-section">
+                    <div class="fx-header">
+                        <button class="btn-mini" id="fx-a-toggle">FX</button>
+                        <select class="toolbar-select fx-select" id="fx-a-select">
+                            <option value="echo">Echo</option>
+                            <option value="reverb">Reverb</option>
+                            <option value="flanger">Flanger</option>
+                            <option value="filter">Filter</option>
+                            <option value="delay">Delay</option>
+                        </select>
+                    </div>
+                    <div class="fx-knobs">
+                        <div class="fx-knob-group">
+                            <label id="fx-a-p1-label">TIME</label>
+                            <input type="range" class="fx-knob" id="fx-a-param1" min="0" max="100" value="30">
+                        </div>
+                        <div class="fx-knob-group">
+                            <label id="fx-a-p2-label">FDBK</label>
+                            <input type="range" class="fx-knob" id="fx-a-param2" min="0" max="100" value="40">
+                        </div>
+                        <div class="fx-knob-group">
+                            <label>D/W</label>
+                            <input type="range" class="fx-knob" id="fx-a-wetdry" min="0" max="100" value="0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stems Section -->
+                <div class="stems-section">
+                    <button class="btn-mini" id="stems-a-toggle">STEMS</button>
+                    <div class="stem-faders">
+                        <div class="stem-group"><label>BASS</label><input type="range" class="stem-fader" id="stem-a-bass" min="0" max="100" value="100"></div>
+                        <div class="stem-group"><label>DRUM</label><input type="range" class="stem-fader" id="stem-a-drums" min="0" max="100" value="100"></div>
+                        <div class="stem-group"><label>VOX</label><input type="range" class="stem-fader" id="stem-a-vocals" min="0" max="100" value="100"></div>
+                        <div class="stem-group"><label>OTH</label><input type="range" class="stem-fader" id="stem-a-other" min="0" max="100" value="100"></div>
+                    </div>
+                </div>
+
+                <!-- Jog Wheel + Beat Jump + Nudge -->
+                <div class="jog-section">
+                    <div class="jog-nudge">
+                        <button class="btn-mini nudge-btn" id="nudge-a-back" title="Nudge back">&lt;</button>
+                        <canvas class="jog-wheel" id="jog-a" width="120" height="120"></canvas>
+                        <button class="btn-mini nudge-btn" id="nudge-a-fwd" title="Nudge forward">&gt;</button>
+                    </div>
+                    <div class="beat-jump-btns">
+                        <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="back">&lt;1</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="back">&lt;4</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="back">&lt;8</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="fwd">8&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="fwd">4&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="fwd">1&gt;</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== MIXER ===== -->
+            <section class="mixer" id="mixer">
+                <!-- Channel A strip -->
+                <div class="channel-strip" id="channel-a">
+                    <div class="channel-label">A</div>
+                    <button class="btn-mini pfl-btn" id="pfl-a" title="Pre-fader listen (headphones)">PFL</button>
+                    <div class="eq-section">
+                        <div class="eq-group">
+                            <label>HI</label>
+                            <input type="range" class="eq-knob" id="eq-a-high" min="-24" max="6" value="0">
+                        </div>
+                        <div class="eq-group">
+                            <label>MID</label>
+                            <input type="range" class="eq-knob" id="eq-a-mid" min="-24" max="6" value="0">
+                        </div>
+                        <div class="eq-group">
+                            <label>LOW</label>
+                            <input type="range" class="eq-knob" id="eq-a-low" min="-24" max="6" value="0">
+                        </div>
+                    </div>
+                    <canvas class="level-meter" id="meter-a" width="24" height="160"></canvas>
+                    <input type="range" class="vol-fader" id="vol-a" min="0" max="100" value="80">
+                </div>
+
+                <!-- Channel B strip -->
+                <div class="channel-strip" id="channel-b">
+                    <div class="channel-label">B</div>
+                    <button class="btn-mini pfl-btn" id="pfl-b" title="Pre-fader listen (headphones)">PFL</button>
+                    <div class="eq-section">
+                        <div class="eq-group">
+                            <label>HI</label>
+                            <input type="range" class="eq-knob" id="eq-b-high" min="-24" max="6" value="0">
+                        </div>
+                        <div class="eq-group">
+                            <label>MID</label>
+                            <input type="range" class="eq-knob" id="eq-b-mid" min="-24" max="6" value="0">
+                        </div>
+                        <div class="eq-group">
+                            <label>LOW</label>
+                            <input type="range" class="eq-knob" id="eq-b-low" min="-24" max="6" value="0">
+                        </div>
+                    </div>
+                    <canvas class="level-meter" id="meter-b" width="24" height="160"></canvas>
+                    <input type="range" class="vol-fader" id="vol-b" min="0" max="100" value="80">
+                </div>
+
+                <!-- Phase Meter -->
+                <div class="phase-section">
+                    <div class="hp-label">PHASE</div>
+                    <canvas id="meter-phase" class="phase-meter" width="140" height="12"></canvas>
+                </div>
+
+                <!-- Headphone / Cue controls -->
+                <div class="headphone-section">
+                    <div class="hp-label">PHONES</div>
+                    <div class="hp-row">
+                        <label>CUE/MIX</label>
+                        <input type="range" id="cue-mix" min="0" max="100" value="0" class="hp-slider" title="Cue/Master mix">
+                    </div>
+                    <div class="hp-row">
+                        <label>VOL</label>
+                        <input type="range" id="cue-volume" min="0" max="100" value="80" class="hp-slider" title="Headphone volume">
+                    </div>
+                    <button class="btn-mini" id="split-cue" title="Split cue (L=cue R=master)">SPLIT</button>
+                    <select class="toolbar-select" id="setting-headphone-output" title="Headphone output device">
+                        <option value="">Default</option>
+                    </select>
+                </div>
+
+                <!-- Crossfader -->
+                <div class="crossfader-section">
+                    <span class="xf-label">A</span>
+                    <input type="range" id="crossfader" min="0" max="100" value="50" class="crossfader">
+                    <span class="xf-label">B</span>
+                </div>
+            </section>
+
+            <!-- ===== DECK B ===== -->
+            <section class="deck deck-b" id="deck-b">
+                <div class="deck-header">
+                    <span class="deck-label deck-label-b">B</span>
+                    <div class="track-info">
+                        <div class="track-title" id="deck-b-title">No Track Loaded</div>
+                        <div class="track-artist" id="deck-b-artist"></div>
+                    </div>
+                    <div class="track-meta">
+                        <span class="bpm-display" id="deck-b-bpm">--- BPM</span>
+                        <div class="key-row">
+                            <span class="key-display" id="deck-b-key">--</span>
+                            <span class="camelot-display" id="deck-b-camelot"></span>
+                            <span class="compat-badge" id="deck-b-compat" style="display:none"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="time-row">
+                    <span class="time-elapsed" id="deck-b-elapsed">0:00.0</span>
+                    <span class="time-remaining" id="deck-b-remaining">-0:00.0</span>
+                </div>
+                <div class="waveform-overview" id="deck-b-overview"></div>
+                <div class="waveform-main" id="deck-b-waveform"></div>
+
+                <!-- Pitch fader row -->
+                <div class="pitch-row">
+                    <button class="btn-mini" id="keylock-b" title="Key Lock">KEY</button>
+                    <button class="btn-mini" id="slip-b" title="Slip Mode">SLIP</button>
+                    <input type="range" id="pitch-b" class="pitch-fader" min="-8" max="8" value="0" step="0.1">
+                    <span class="pitch-display" id="pitch-b-display">0.0%</span>
+                    <select class="toolbar-select" id="pitch-range-b" title="Pitch range">
+                        <option value="8">±8%</option>
+                        <option value="16">±16%</option>
+                        <option value="50">±50%</option>
+                    </select>
+                </div>
+
+                <div class="transport-controls">
+                    <button class="btn-transport btn-cue" id="deck-b-cue">CUE</button>
+                    <button class="btn-transport btn-play" id="deck-b-play">
+                        <svg class="icon-play" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <svg class="icon-pause hidden" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+                    </button>
+                    <button class="btn-transport btn-sync" id="deck-b-sync">SYNC</button>
+                </div>
+
+                <!-- Loop controls -->
+                <div class="loop-controls">
+                    <button class="btn-mini loop-btn" id="loop-b-in">IN</button>
+                    <button class="btn-mini loop-btn" id="loop-b-out">OUT</button>
+                    <button class="btn-mini loop-btn" id="loop-b-toggle">LOOP</button>
+                    <button class="btn-mini loop-btn" id="loop-b-halve">½</button>
+                    <button class="btn-mini loop-btn" id="loop-b-double">×2</button>
+                    <div class="auto-loop-btns">
+                        <button class="btn-mini auto-loop" data-beats="1">1</button>
+                        <button class="btn-mini auto-loop" data-beats="2">2</button>
+                        <button class="btn-mini auto-loop" data-beats="4">4</button>
+                        <button class="btn-mini auto-loop" data-beats="8">8</button>
+                        <button class="btn-mini auto-loop" data-beats="16">16</button>
+                    </div>
+                </div>
+
+                <!-- Hot cue pads -->
+                <div class="hot-cue-pads" id="deck-b-pads">
+                    <button class="cue-pad" data-pad="0">1</button>
+                    <button class="cue-pad" data-pad="1">2</button>
+                    <button class="cue-pad" data-pad="2">3</button>
+                    <button class="cue-pad" data-pad="3">4</button>
+                    <button class="cue-pad" data-pad="4">5</button>
+                    <button class="cue-pad" data-pad="5">6</button>
+                    <button class="cue-pad" data-pad="6">7</button>
+                    <button class="cue-pad" data-pad="7">8</button>
+                </div>
+
+                <!-- FX Section -->
+                <div class="fx-section">
+                    <div class="fx-header">
+                        <button class="btn-mini" id="fx-b-toggle">FX</button>
+                        <select class="toolbar-select fx-select" id="fx-b-select">
+                            <option value="echo">Echo</option>
+                            <option value="reverb">Reverb</option>
+                            <option value="flanger">Flanger</option>
+                            <option value="filter">Filter</option>
+                            <option value="delay">Delay</option>
+                        </select>
+                    </div>
+                    <div class="fx-knobs">
+                        <div class="fx-knob-group">
+                            <label id="fx-b-p1-label">TIME</label>
+                            <input type="range" class="fx-knob" id="fx-b-param1" min="0" max="100" value="30">
+                        </div>
+                        <div class="fx-knob-group">
+                            <label id="fx-b-p2-label">FDBK</label>
+                            <input type="range" class="fx-knob" id="fx-b-param2" min="0" max="100" value="40">
+                        </div>
+                        <div class="fx-knob-group">
+                            <label>D/W</label>
+                            <input type="range" class="fx-knob" id="fx-b-wetdry" min="0" max="100" value="0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stems Section -->
+                <div class="stems-section">
+                    <button class="btn-mini" id="stems-b-toggle">STEMS</button>
+                    <div class="stem-faders">
+                        <div class="stem-group"><label>BASS</label><input type="range" class="stem-fader" id="stem-b-bass" min="0" max="100" value="100"></div>
+                        <div class="stem-group"><label>DRUM</label><input type="range" class="stem-fader" id="stem-b-drums" min="0" max="100" value="100"></div>
+                        <div class="stem-group"><label>VOX</label><input type="range" class="stem-fader" id="stem-b-vocals" min="0" max="100" value="100"></div>
+                        <div class="stem-group"><label>OTH</label><input type="range" class="stem-fader" id="stem-b-other" min="0" max="100" value="100"></div>
+                    </div>
+                </div>
+
+                <!-- Jog Wheel + Beat Jump + Nudge -->
+                <div class="jog-section">
+                    <div class="jog-nudge">
+                        <button class="btn-mini nudge-btn" id="nudge-b-back" title="Nudge back">&lt;</button>
+                        <canvas class="jog-wheel" id="jog-b" width="120" height="120"></canvas>
+                        <button class="btn-mini nudge-btn" id="nudge-b-fwd" title="Nudge forward">&gt;</button>
+                    </div>
+                    <div class="beat-jump-btns">
+                        <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="back">&lt;1</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="back">&lt;4</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="back">&lt;8</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="fwd">8&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="fwd">4&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="fwd">1&gt;</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===== AUX INPUTS + SAMPLER ===== -->
+        <div class="aux-row">
+
+            <!-- MIC CHANNEL -->
+            <section class="aux-section mic-section">
+                <div class="aux-header">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                    <span class="aux-title">MIC</span>
+                    <span class="aux-status" id="mic-status">Off</span>
+                </div>
+                <div class="aux-controls">
+                    <button class="btn-aux" id="mic-toggle">CONNECT</button>
+                    <button class="btn-aux" id="mic-mute">MUTE</button>
+                </div>
+                <div class="aux-slider-row">
+                    <label>VOL</label>
+                    <input type="range" id="mic-volume" min="0" max="100" value="80" class="aux-slider">
+                    <canvas id="meter-mic" width="120" height="10"></canvas>
+                </div>
+                <div class="aux-eq">
+                    <div class="eq-group-inline"><label>HI</label><input type="range" class="eq-knob-sm" id="eq-mic-high" min="-24" max="6" value="0"></div>
+                    <div class="eq-group-inline"><label>MID</label><input type="range" class="eq-knob-sm" id="eq-mic-mid" min="-24" max="6" value="0"></div>
+                    <div class="eq-group-inline"><label>LOW</label><input type="range" class="eq-knob-sm" id="eq-mic-low" min="-24" max="6" value="0"></div>
+                </div>
+            </section>
+
+            <!-- SYSTEM AUDIO -->
+            <section class="aux-section system-section">
+                <div class="aux-header">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    <span class="aux-title">SYSTEM AUDIO</span>
+                    <span class="aux-status" id="system-status">Off</span>
+                </div>
+                <div class="aux-controls">
+                    <button class="btn-aux" id="system-toggle">CAPTURE</button>
+                </div>
+                <div class="aux-slider-row">
+                    <label>VOL</label>
+                    <input type="range" id="system-volume" min="0" max="100" value="80" class="aux-slider">
+                    <canvas id="meter-system" width="120" height="10"></canvas>
+                </div>
+            </section>
+
+            <!-- SAMPLER -->
+            <section class="aux-section sampler-section">
+                <div class="aux-header">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                    <span class="aux-title">SAMPLER</span>
+                    <div class="sampler-vol">
+                        <label>VOL</label>
+                        <input type="range" id="sampler-volume" min="0" max="100" value="80" class="aux-slider-sm">
+                    </div>
+                </div>
+                <div class="sampler-pads" id="sampler-pads">
+                    <div class="sample-pad" data-pad="0"><span class="sample-num">1</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="1"><span class="sample-num">2</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="2"><span class="sample-num">3</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="3"><span class="sample-num">4</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="4"><span class="sample-num">5</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="5"><span class="sample-num">6</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="6"><span class="sample-num">7</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="7"><span class="sample-num">8</span><span class="sample-name"></span></div>
+                </div>
+                <div class="sampler-hint">Click to trigger / Right-click to load sample</div>
+            </section>
+
+        </div>
+
+        <!-- ===== LIBRARY + PLAYLISTS + SETLIST ===== -->
+        <div class="bottom-row">
+
+            <!-- Playlists sidebar -->
+            <section class="playlists-sidebar" id="playlists-sidebar">
+                <div class="playlists-header">
+                    <h3 class="library-title">PLAYLISTS</h3>
+                    <button class="btn-toolbar btn-sm" id="playlist-create" title="New playlist">+ NEW</button>
+                </div>
+                <div class="playlist-list" id="playlist-list"></div>
+            </section>
+
+            <section class="library" id="library">
+                <div class="library-header">
+                    <h3 class="library-title">LIBRARY</h3>
+                    <input type="search" id="library-search" class="library-search" placeholder="Search tracks...">
+                </div>
+                <div class="library-table-wrapper">
+                    <table class="library-table" id="library-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Artist</th>
+                                <th>BPM</th>
+                                <th>Key</th>
+                                <th>Duration</th>
+                                <th>Load</th>
+                            </tr>
+                        </thead>
+                        <tbody id="library-body">
+                            <tr><td colspan="6" style="text-align:center;color:#555577">Loading library...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="setlist-panel" id="setlist-panel">
+                <div class="setlist-header">
+                    <h3 class="library-title">SETLIST</h3>
+                    <div class="setlist-actions-bar">
+                        <button class="btn-toolbar btn-sm" id="setlist-export" title="Export setlist">EXPORT</button>
+                        <button class="btn-toolbar btn-sm" id="setlist-clear" title="Clear queue">CLEAR</button>
+                    </div>
+                </div>
+                <div class="setlist-queue" id="setlist-queue">
+                    <div class="setlist-empty">Queue empty — add tracks from library</div>
+                </div>
+                <div class="setlist-divider">
+                    <span>HISTORY</span>
+                </div>
+                <div class="setlist-history" id="setlist-history"></div>
+            </section>
+        </div>
+
+        <!-- ===== FLOW MODE PANEL (overlay) ===== -->
+        <div class="flow-panel hidden" id="flow-panel"></div>
+
+        <!-- ===== SETTINGS PANEL (overlay) ===== -->
+        <div class="settings-panel hidden" id="settings-panel">
+            <div class="settings-header">
+                <h3 class="library-title">SETTINGS</h3>
+                <button class="btn-toolbar btn-sm" id="settings-close">X</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-group">
+                    <label class="settings-label">Crossfader Curve</label>
+                    <select class="toolbar-select" id="setting-cf-curve">
+                        <option value="equal-power">Equal Power</option>
+                        <option value="linear">Linear</option>
+                        <option value="cut">Cut</option>
+                    </select>
+                </div>
+                <div class="settings-group">
+                    <label class="settings-label">Key Shift A</label>
+                    <input type="range" id="keyshift-a" min="-6" max="6" value="0" step="1" class="hp-slider">
+                    <span class="toolbar-text mono" id="keyshift-a-display">0</span>
+                </div>
+                <div class="settings-group">
+                    <label class="settings-label">Key Shift B</label>
+                    <input type="range" id="keyshift-b" min="-6" max="6" value="0" step="1" class="hp-slider">
+                    <span class="toolbar-text mono" id="keyshift-b-display">0</span>
+                </div>
+                <div class="settings-group">
+                    <label class="settings-label">MIDI Profiles</label>
+                    <div id="midi-profiles-list" class="midi-profiles-list"></div>
+                    <button class="btn-toolbar btn-sm" id="midi-save-profile">SAVE PROFILE</button>
+                </div>
+                <div class="settings-group">
+                    <label class="settings-label">Data</label>
+                    <div class="settings-actions">
+                        <button class="btn-toolbar btn-sm" id="settings-export">EXPORT ALL</button>
+                        <button class="btn-toolbar btn-sm" id="settings-import">IMPORT</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/timeline.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/minimap.min.js"></script>
+    <script>
+        // Verify WaveSurfer plugins loaded (UMD registers on window.WaveSurfer)
+        if (typeof WaveSurfer !== 'undefined') {
+            console.log('WaveSurfer loaded:', !!WaveSurfer, 'Minimap:', !!WaveSurfer.Minimap, 'Timeline:', !!WaveSurfer.Timeline, 'Regions:', !!WaveSurfer.Regions);
+        }
+    </script>
+    <script type="module" src="player.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>

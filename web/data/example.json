@@ -1,0 +1,130 @@
+{
+  "metadata": {
+    "title": "Example DJ Mix",
+    "artist": "DJ Example",
+    "date": "2024-01-15",
+    "duration": 3600,
+    "sample_rate": 48000,
+    "bpm": 128,
+    "genre": "House / Techno",
+    "description": "Example mix showcasing the Ardour-to-web workflow",
+    "tags": ["house", "techno", "example"],
+    "source": "Ardour",
+    "exported": "2024-01-15T12:00:00Z"
+  },
+  "audio_files": {
+    "mp3": "example-mix.mp3",
+    "ogg": "example-mix.ogg"
+  },
+  "markers": [
+    {
+      "id": "intro",
+      "name": "Intro",
+      "time": 0,
+      "timestamp": "00:00",
+      "type": "section",
+      "color": "#3b82f6"
+    },
+    {
+      "id": "track-1",
+      "name": "Track 1 - Artist A - Song Title",
+      "time": 120,
+      "timestamp": "02:00",
+      "type": "track",
+      "color": "#10b981",
+      "metadata": {
+        "artist": "Artist A",
+        "title": "Song Title",
+        "label": "Example Records"
+      }
+    },
+    {
+      "id": "transition-1",
+      "name": "Transition",
+      "time": 480,
+      "timestamp": "08:00",
+      "type": "transition",
+      "color": "#8b5cf6"
+    },
+    {
+      "id": "track-2",
+      "name": "Track 2 - Artist B - Another Song",
+      "time": 540,
+      "timestamp": "09:00",
+      "type": "track",
+      "color": "#10b981",
+      "metadata": {
+        "artist": "Artist B",
+        "title": "Another Song",
+        "label": "Deep House Label"
+      }
+    },
+    {
+      "id": "breakdown",
+      "name": "Breakdown",
+      "time": 1800,
+      "timestamp": "30:00",
+      "type": "section",
+      "color": "#f59e0b"
+    },
+    {
+      "id": "track-3",
+      "name": "Track 3 - Artist C - Peak Time",
+      "time": 1920,
+      "timestamp": "32:00",
+      "type": "track",
+      "color": "#10b981",
+      "metadata": {
+        "artist": "Artist C",
+        "title": "Peak Time",
+        "label": "Techno Records"
+      }
+    },
+    {
+      "id": "outro",
+      "name": "Outro",
+      "time": 3480,
+      "timestamp": "58:00",
+      "type": "section",
+      "color": "#3b82f6"
+    }
+  ],
+  "tempo": [
+    {
+      "time": 0,
+      "bpm": 128
+    },
+    {
+      "time": 1800,
+      "bpm": 132
+    }
+  ],
+  "regions": [
+    {
+      "id": "intro-section",
+      "start": 0,
+      "end": 120,
+      "label": "Intro",
+      "color": "rgba(59, 130, 246, 0.1)"
+    },
+    {
+      "id": "main-section",
+      "start": 120,
+      "end": 3480,
+      "label": "Main Set",
+      "color": "rgba(16, 185, 129, 0.1)"
+    },
+    {
+      "id": "outro-section",
+      "start": 3480,
+      "end": 3600,
+      "label": "Outro",
+      "color": "rgba(59, 130, 246, 0.1)"
+    }
+  ],
+  "social": {
+    "share_url": "https://example.com/mix/example-dj-mix",
+    "download_enabled": true,
+    "comments_enabled": false
+  }
+}

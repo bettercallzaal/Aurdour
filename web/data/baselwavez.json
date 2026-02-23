@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "title": "BaselWavez",
+    "artist": "BetterCallZaal",
+    "date": "2026-02-21",
+    "duration": 85,
+    "genre": "Electronic",
+    "description": "BaselWavez by BetterCallZaal",
+    "tags": [],
+    "source": "pipeline",
+    "exported": "2026-02-21T19:06:21.245499"
+  },
+  "audio_files": {
+    "mp3": "data/baselwavez.mp3"
+  },
+  "markers": [],
+  "social": {
+    "share_url": "",
+    "download_enabled": true,
+    "comments_enabled": false
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "title": "WaveWarZ",
+    "artist": "BetterCallZaal",
+    "date": "2026-02-21",
+    "duration": 179,
+    "genre": "Electronic",
+    "description": "WaveWarZ by BetterCallZaal",
+    "tags": [],
+    "source": "pipeline",
+    "exported": "2026-02-21T17:47:29.142101"
+  },
+  "audio_files": {
+    "mp3": "data/wavewarz.mp3"
+  },
+  "markers": [
+    {
+      "id": "intro",
+      "name": "Intro",
+      "time": 0,
+      "timestamp": "0:00",
+      "type": "section",
+      "color": "#3b82f6"
+    },
+    {
+      "id": "battle-begins",
+      "name": "Battle Begins",
+      "time": 45,
+      "timestamp": "0:45",
+      "type": "track",
+      "color": "#10b981"
+    }
+  ],
+  "social": {
+    "share_url": "",
+    "download_enabled": true,
+    "comments_enabled": false
+  }
+}

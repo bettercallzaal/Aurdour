@@ -1,0 +1,17 @@
+{
+    "name": "AURDOUR DJ",
+    "short_name": "Aurdour",
+    "description": "Professional two-deck DJ platform with mixing, effects, and streaming",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0d0d1a",
+    "theme_color": "#00d4ff",
+    "orientation": "landscape",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230d0d1a'/><text x='50' y='62' font-size='36' text-anchor='middle' fill='%2300d4ff' font-family='sans-serif' font-weight='800'>DJ</text></svg>",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ]
+}
