@@ -1,4 +1,4 @@
-// DragDrop.js — Drag & drop audio files from desktop onto decks
+// DragDrop.js — Drag & drop audio files from desktop onto decks + file picker buttons
 
 export class DragDrop {
     constructor(decks, audioRouter) {
@@ -6,6 +6,52 @@ export class DragDrop {
         this.router = audioRouter;
 
         this._initDropZones();
+        this._initLoadButtons();
+    }
+
+    _initLoadButtons() {
+        ['a', 'b'].forEach(ch => {
+            const deckId = ch.toUpperCase();
+            const deckEl = document.getElementById(`deck-${ch}`);
+            if (!deckEl) return;
+
+            // Find the deck header to insert the load button
+            const header = deckEl.querySelector('.deck-header');
+            if (!header) return;
+
+            const loadBtn = document.createElement('button');
+            loadBtn.className = 'btn-mini load-file-btn';
+            loadBtn.id = `load-file-${ch}`;
+            loadBtn.textContent = 'LOAD';
+            loadBtn.title = 'Load audio file from disk';
+            loadBtn.style.cssText = 'margin-left:8px;background:#00d4ff22;border:1px solid #00d4ff;color:#00d4ff;cursor:pointer;padding:2px 10px;font-weight:bold;';
+            header.appendChild(loadBtn);
+
+            // Hidden file input
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.opus';
+            fileInput.style.display = 'none';
+            fileInput.id = `file-input-${ch}`;
+            deckEl.appendChild(fileInput);
+
+            loadBtn.addEventListener('click', () => {
+                console.log(`[AUDIO:LOAD] Load button clicked for Deck ${deckId}`);
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file && this._isAudioFile(file)) {
+                    console.log(`[AUDIO:LOAD] File selected for Deck ${deckId}: "${file.name}" (${(file.size / 1024 / 1024).toFixed(1)}MB, type=${file.type})`);
+                    this.router.resume();
+                    this._loadFile(deckId, file);
+                } else if (file) {
+                    console.warn(`[AUDIO:LOAD] Rejected file: "${file.name}" (type=${file.type}) — not a recognized audio format`);
+                }
+                fileInput.value = ''; // reset so same file can be re-selected
+            });
+        });
     }
 
     _initDropZones() {
@@ -31,6 +77,8 @@ export class DragDrop {
                 const files = Array.from(e.dataTransfer.files);
                 const audioFile = files.find(f => this._isAudioFile(f));
                 if (audioFile) {
+                    console.log(`[AUDIO:DROP] File dropped on Deck ${deckId}: "${audioFile.name}" (${(audioFile.size / 1024 / 1024).toFixed(1)}MB)`);
+                    this.router.resume();
                     this._loadFile(deckId, audioFile);
                 }
             });
@@ -62,10 +110,18 @@ export class DragDrop {
 
     async _loadFile(deckId, file) {
         const deck = this.decks[deckId];
-        if (!deck) return;
+        if (!deck) {
+            console.error(`[AUDIO:LOAD] Deck ${deckId} not found!`);
+            return;
+        }
+
+        console.log(`[AUDIO:LOAD] Loading file to Deck ${deckId}...`);
+        console.log(`[AUDIO:LOAD]   File: "${file.name}" | Size: ${(file.size / 1024 / 1024).toFixed(2)}MB | Type: ${file.type}`);
+        console.log(`[AUDIO:LOAD]   AudioContext state: ${this.router.ctx.state} | Sample rate: ${this.router.ctx.sampleRate}Hz`);
 
         // Create a blob URL for the audio file
         const audioUrl = URL.createObjectURL(file);
+        console.log(`[AUDIO:LOAD]   Blob URL: ${audioUrl}`);
 
         // Extract filename-based metadata
         const name = file.name.replace(/\.[^/.]+$/, '');
@@ -92,6 +148,7 @@ export class DragDrop {
         deck.currentRate = 1.0;
         deck.beatPositions = [];
 
+        console.log(`[AUDIO:LOAD]   Calling wavesurfer.load()...`);
         deck.wavesurfer.load(audioUrl);
         deck._updateDeckUI();
 

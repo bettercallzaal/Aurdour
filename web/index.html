@@ -12,7 +12,7 @@
     <meta name="theme-color" content="#00d4ff">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="dj-app">
@@ -21,7 +21,7 @@
         <header class="top-bar">
             <div class="logo">AURDOUR <span class="logo-accent">DJ</span></div>
 
-            <div class="toolbar-group">
+            <div class="toolbar-group pro-only">
                 <!-- Recording -->
                 <button class="btn-toolbar" id="rec-btn" title="Record mix (R)">REC</button>
                 <span class="toolbar-text" id="rec-time">0:00</span>
@@ -53,14 +53,14 @@
                 </select>
             </div>
 
-            <div class="toolbar-group">
+            <div class="toolbar-group pro-only">
                 <!-- BPM Tap -->
                 <button class="btn-toolbar" id="bpm-tap-btn" title="Tap BPM (T)">TAP</button>
                 <span class="toolbar-text mono" id="bpm-tap-display">--- BPM</span>
                 <button class="btn-toolbar btn-sm" id="bpm-tap-reset" title="Reset BPM">RST</button>
             </div>
 
-            <div class="toolbar-group">
+            <div class="toolbar-group pro-only">
                 <!-- MIDI -->
                 <span class="toolbar-label">MIDI</span>
                 <span class="toolbar-text" id="midi-status">--</span>
@@ -68,13 +68,13 @@
                 <button class="btn-toolbar btn-sm" id="midi-learn" title="MIDI learn">LEARN</button>
             </div>
 
-            <div class="toolbar-group">
+            <div class="toolbar-group pro-only">
                 <!-- RGB / Quantize -->
                 <button class="btn-toolbar btn-sm" id="rgb-toggle" title="RGB waveform">RGB</button>
                 <button class="btn-toolbar btn-sm" id="quantize-toggle" title="Quantize to beat grid">QTZ</button>
             </div>
 
-            <div class="toolbar-group">
+            <div class="toolbar-group pro-only">
                 <!-- Performance Monitor -->
                 <span class="toolbar-label">PERF</span>
                 <span class="toolbar-text mono" id="perf-latency">--ms</span>
@@ -82,19 +82,35 @@
                 <span class="toolbar-text mono" id="perf-buffer">--</span>
             </div>
 
-            <div class="toolbar-group">
-                <!-- Flow Mode -->
-                <button class="btn-toolbar" id="flow-toggle-btn" title="Flow Mode — Auto-DJ for easy mixing">FLOW</button>
+            <!-- Always-visible controls -->
+            <div class="toolbar-spacer"></div>
+
+            <div class="toolbar-group simple-flow-group" data-tutorial="flow">
+                <button class="btn-toolbar btn-flow" id="flow-toggle-btn" title="Flow Mode — Auto-DJ picks tracks and mixes for you">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round" stroke-linecap="round"/></svg>
+                    <span class="flow-btn-text">AUTO MIX</span>
+                </button>
             </div>
 
             <div class="toolbar-group">
-                <!-- Settings -->
+                <button class="btn-toolbar btn-pro-toggle" id="pro-mode-toggle" data-tutorial="pro" title="Toggle Pro Mode for advanced DJ controls">
+                    <svg class="pro-icon-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6V3m0 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z"/><path d="M12 12l4-2M12 12l-4-2M12 12v5"/></svg>
+                    <svg class="pro-icon-on hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6V3m0 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z"/><path d="M12 12l4-2M12 12l-4-2M12 12v5"/></svg>
+                    <span class="pro-btn-label">PRO</span>
+                </button>
+            </div>
+
+            <div class="toolbar-group">
+                <button class="btn-toolbar btn-sm btn-help" id="tutorial-restart" title="Show tutorial">?</button>
+            </div>
+
+            <div class="toolbar-group pro-only">
                 <button class="btn-toolbar btn-sm" id="settings-btn" title="Settings">SETTINGS</button>
             </div>
 
-            <div class="master-section">
-                <label class="master-label">BOOTH</label>
-                <input type="range" id="booth-volume" min="0" max="100" value="80" class="master-slider" title="Booth output volume">
+            <div class="master-section" data-tutorial="master">
+                <label class="master-label pro-only">BOOTH</label>
+                <input type="range" id="booth-volume" min="0" max="100" value="80" class="master-slider pro-only" title="Booth output volume">
                 <label class="master-label">MASTER</label>
                 <input type="range" id="master-volume" min="0" max="100" value="80" class="master-slider">
                 <canvas id="master-meter" width="200" height="16"></canvas>
@@ -121,7 +137,12 @@
         <div class="decks-row">
 
             <!-- ===== DECK A ===== -->
-            <section class="deck deck-a" id="deck-a">
+            <section class="deck deck-a" id="deck-a" data-tutorial="deck">
+                <div class="deck-drop-hint" id="deck-a-hint">
+                    <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 19V6l12-3v13"/><circle cx="6" cy="18" r="3" fill="none"/><circle cx="18" cy="15" r="3" fill="none"/></svg>
+                    <span>Browse the library below to load a track</span>
+                    <span class="hint-sub">or drag & drop an audio file here</span>
+                </div>
                 <div class="deck-header">
                     <span class="deck-label deck-label-a">A</span>
                     <div class="track-info">
@@ -144,20 +165,20 @@
                 <div class="waveform-overview" id="deck-a-overview"></div>
                 <div class="waveform-main" id="deck-a-waveform"></div>
 
-                <!-- Pitch fader row -->
-                <div class="pitch-row">
+                <!-- Pitch fader row (PRO) -->
+                <div class="pitch-row pro-only">
                     <button class="btn-mini" id="keylock-a" title="Key Lock">KEY</button>
                     <button class="btn-mini" id="slip-a" title="Slip Mode">SLIP</button>
                     <input type="range" id="pitch-a" class="pitch-fader" min="-8" max="8" value="0" step="0.1">
                     <span class="pitch-display" id="pitch-a-display">0.0%</span>
                     <select class="toolbar-select" id="pitch-range-a" title="Pitch range">
-                        <option value="8">±8%</option>
-                        <option value="16">±16%</option>
-                        <option value="50">±50%</option>
+                        <option value="8">+-8%</option>
+                        <option value="16">+-16%</option>
+                        <option value="50">+-50%</option>
                     </select>
                 </div>
 
-                <div class="transport-controls">
+                <div class="transport-controls" data-tutorial="transport">
                     <button class="btn-transport btn-cue" id="deck-a-cue">CUE</button>
                     <button class="btn-transport btn-play" id="deck-a-play">
                         <svg class="icon-play" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -166,13 +187,13 @@
                     <button class="btn-transport btn-sync" id="deck-a-sync">SYNC</button>
                 </div>
 
-                <!-- Loop controls -->
-                <div class="loop-controls">
+                <!-- Loop controls (PRO) -->
+                <div class="loop-controls pro-only">
                     <button class="btn-mini loop-btn" id="loop-a-in">IN</button>
                     <button class="btn-mini loop-btn" id="loop-a-out">OUT</button>
                     <button class="btn-mini loop-btn" id="loop-a-toggle">LOOP</button>
-                    <button class="btn-mini loop-btn" id="loop-a-halve">½</button>
-                    <button class="btn-mini loop-btn" id="loop-a-double">×2</button>
+                    <button class="btn-mini loop-btn" id="loop-a-halve">1/2</button>
+                    <button class="btn-mini loop-btn" id="loop-a-double">x2</button>
                     <div class="auto-loop-btns">
                         <button class="btn-mini auto-loop" data-beats="1">1</button>
                         <button class="btn-mini auto-loop" data-beats="2">2</button>
@@ -182,8 +203,8 @@
                     </div>
                 </div>
 
-                <!-- Hot cue pads -->
-                <div class="hot-cue-pads" id="deck-a-pads">
+                <!-- Hot cue pads (PRO) -->
+                <div class="hot-cue-pads pro-only" id="deck-a-pads">
                     <button class="cue-pad" data-pad="0">1</button>
                     <button class="cue-pad" data-pad="1">2</button>
                     <button class="cue-pad" data-pad="2">3</button>
@@ -194,8 +215,8 @@
                     <button class="cue-pad" data-pad="7">8</button>
                 </div>
 
-                <!-- FX Section -->
-                <div class="fx-section">
+                <!-- FX Section (PRO) -->
+                <div class="fx-section pro-only">
                     <div class="fx-header">
                         <button class="btn-mini" id="fx-a-toggle">FX</button>
                         <select class="toolbar-select fx-select" id="fx-a-select">
@@ -222,8 +243,8 @@
                     </div>
                 </div>
 
-                <!-- Stems Section -->
-                <div class="stems-section">
+                <!-- Stems Section (PRO) -->
+                <div class="stems-section pro-only">
                     <button class="btn-mini" id="stems-a-toggle">STEMS</button>
                     <div class="stem-faders">
                         <div class="stem-group"><label>BASS</label><input type="range" class="stem-fader" id="stem-a-bass" min="0" max="100" value="100"></div>
@@ -233,14 +254,14 @@
                     </div>
                 </div>
 
-                <!-- Jog Wheel + Beat Jump + Nudge -->
+                <!-- Jog Wheel + Nudge (always visible) -->
                 <div class="jog-section">
                     <div class="jog-nudge">
                         <button class="btn-mini nudge-btn" id="nudge-a-back" title="Nudge back">&lt;</button>
                         <canvas class="jog-wheel" id="jog-a" width="120" height="120"></canvas>
                         <button class="btn-mini nudge-btn" id="nudge-a-fwd" title="Nudge forward">&gt;</button>
                     </div>
-                    <div class="beat-jump-btns">
+                    <div class="beat-jump-btns pro-only">
                         <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="back">&lt;1</button>
                         <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="back">&lt;4</button>
                         <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="back">&lt;8</button>
@@ -256,8 +277,8 @@
                 <!-- Channel A strip -->
                 <div class="channel-strip" id="channel-a">
                     <div class="channel-label">A</div>
-                    <button class="btn-mini pfl-btn" id="pfl-a" title="Pre-fader listen (headphones)">PFL</button>
-                    <div class="eq-section">
+                    <button class="btn-mini pfl-btn pro-only" id="pfl-a" title="Pre-fader listen (headphones)">PFL</button>
+                    <div class="eq-section pro-only">
                         <div class="eq-group">
                             <label>HI</label>
                             <input type="range" class="eq-knob" id="eq-a-high" min="-24" max="6" value="0">
@@ -278,8 +299,8 @@
                 <!-- Channel B strip -->
                 <div class="channel-strip" id="channel-b">
                     <div class="channel-label">B</div>
-                    <button class="btn-mini pfl-btn" id="pfl-b" title="Pre-fader listen (headphones)">PFL</button>
-                    <div class="eq-section">
+                    <button class="btn-mini pfl-btn pro-only" id="pfl-b" title="Pre-fader listen (headphones)">PFL</button>
+                    <div class="eq-section pro-only">
                         <div class="eq-group">
                             <label>HI</label>
                             <input type="range" class="eq-knob" id="eq-b-high" min="-24" max="6" value="0">
@@ -297,14 +318,14 @@
                     <input type="range" class="vol-fader" id="vol-b" min="0" max="100" value="80">
                 </div>
 
-                <!-- Phase Meter -->
-                <div class="phase-section">
+                <!-- Phase Meter (PRO) -->
+                <div class="phase-section pro-only">
                     <div class="hp-label">PHASE</div>
                     <canvas id="meter-phase" class="phase-meter" width="140" height="12"></canvas>
                 </div>
 
-                <!-- Headphone / Cue controls -->
-                <div class="headphone-section">
+                <!-- Headphone / Cue controls (PRO) -->
+                <div class="headphone-section pro-only">
                     <div class="hp-label">PHONES</div>
                     <div class="hp-row">
                         <label>CUE/MIX</label>
@@ -321,15 +342,27 @@
                 </div>
 
                 <!-- Crossfader -->
-                <div class="crossfader-section">
-                    <span class="xf-label">A</span>
-                    <input type="range" id="crossfader" min="0" max="100" value="50" class="crossfader">
-                    <span class="xf-label">B</span>
+                <div class="crossfader-section" data-tutorial="crossfader">
+                    <div class="xf-endpoint xf-endpoint-a">
+                        <span class="xf-label">A</span>
+                    </div>
+                    <div class="xf-track-wrap">
+                        <input type="range" id="crossfader" min="0" max="100" value="50" class="crossfader">
+                        <span class="xf-hint">slide to blend</span>
+                    </div>
+                    <div class="xf-endpoint xf-endpoint-b">
+                        <span class="xf-label">B</span>
+                    </div>
                 </div>
             </section>
 
             <!-- ===== DECK B ===== -->
             <section class="deck deck-b" id="deck-b">
+                <div class="deck-drop-hint" id="deck-b-hint">
+                    <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 19V6l12-3v13"/><circle cx="6" cy="18" r="3" fill="none"/><circle cx="18" cy="15" r="3" fill="none"/></svg>
+                    <span>Load your second track here</span>
+                    <span class="hint-sub">to mix between Deck A and B</span>
+                </div>
                 <div class="deck-header">
                     <span class="deck-label deck-label-b">B</span>
                     <div class="track-info">
@@ -352,16 +385,16 @@
                 <div class="waveform-overview" id="deck-b-overview"></div>
                 <div class="waveform-main" id="deck-b-waveform"></div>
 
-                <!-- Pitch fader row -->
-                <div class="pitch-row">
+                <!-- Pitch fader row (PRO) -->
+                <div class="pitch-row pro-only">
                     <button class="btn-mini" id="keylock-b" title="Key Lock">KEY</button>
                     <button class="btn-mini" id="slip-b" title="Slip Mode">SLIP</button>
                     <input type="range" id="pitch-b" class="pitch-fader" min="-8" max="8" value="0" step="0.1">
                     <span class="pitch-display" id="pitch-b-display">0.0%</span>
                     <select class="toolbar-select" id="pitch-range-b" title="Pitch range">
-                        <option value="8">±8%</option>
-                        <option value="16">±16%</option>
-                        <option value="50">±50%</option>
+                        <option value="8">+-8%</option>
+                        <option value="16">+-16%</option>
+                        <option value="50">+-50%</option>
                     </select>
                 </div>
 
@@ -374,13 +407,13 @@
                     <button class="btn-transport btn-sync" id="deck-b-sync">SYNC</button>
                 </div>
 
-                <!-- Loop controls -->
-                <div class="loop-controls">
+                <!-- Loop controls (PRO) -->
+                <div class="loop-controls pro-only">
                     <button class="btn-mini loop-btn" id="loop-b-in">IN</button>
                     <button class="btn-mini loop-btn" id="loop-b-out">OUT</button>
                     <button class="btn-mini loop-btn" id="loop-b-toggle">LOOP</button>
-                    <button class="btn-mini loop-btn" id="loop-b-halve">½</button>
-                    <button class="btn-mini loop-btn" id="loop-b-double">×2</button>
+                    <button class="btn-mini loop-btn" id="loop-b-halve">1/2</button>
+                    <button class="btn-mini loop-btn" id="loop-b-double">x2</button>
                     <div class="auto-loop-btns">
                         <button class="btn-mini auto-loop" data-beats="1">1</button>
                         <button class="btn-mini auto-loop" data-beats="2">2</button>
@@ -390,8 +423,8 @@
                     </div>
                 </div>
 
-                <!-- Hot cue pads -->
-                <div class="hot-cue-pads" id="deck-b-pads">
+                <!-- Hot cue pads (PRO) -->
+                <div class="hot-cue-pads pro-only" id="deck-b-pads">
                     <button class="cue-pad" data-pad="0">1</button>
                     <button class="cue-pad" data-pad="1">2</button>
                     <button class="cue-pad" data-pad="2">3</button>
@@ -402,8 +435,8 @@
                     <button class="cue-pad" data-pad="7">8</button>
                 </div>
 
-                <!-- FX Section -->
-                <div class="fx-section">
+                <!-- FX Section (PRO) -->
+                <div class="fx-section pro-only">
                     <div class="fx-header">
                         <button class="btn-mini" id="fx-b-toggle">FX</button>
                         <select class="toolbar-select fx-select" id="fx-b-select">
@@ -430,8 +463,8 @@
                     </div>
                 </div>
 
-                <!-- Stems Section -->
-                <div class="stems-section">
+                <!-- Stems Section (PRO) -->
+                <div class="stems-section pro-only">
                     <button class="btn-mini" id="stems-b-toggle">STEMS</button>
                     <div class="stem-faders">
                         <div class="stem-group"><label>BASS</label><input type="range" class="stem-fader" id="stem-b-bass" min="0" max="100" value="100"></div>
@@ -441,14 +474,14 @@
                     </div>
                 </div>
 
-                <!-- Jog Wheel + Beat Jump + Nudge -->
+                <!-- Jog Wheel + Nudge (always visible) -->
                 <div class="jog-section">
                     <div class="jog-nudge">
                         <button class="btn-mini nudge-btn" id="nudge-b-back" title="Nudge back">&lt;</button>
                         <canvas class="jog-wheel" id="jog-b" width="120" height="120"></canvas>
                         <button class="btn-mini nudge-btn" id="nudge-b-fwd" title="Nudge forward">&gt;</button>
                     </div>
-                    <div class="beat-jump-btns">
+                    <div class="beat-jump-btns pro-only">
                         <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="back">&lt;1</button>
                         <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="back">&lt;4</button>
                         <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="back">&lt;8</button>
@@ -460,8 +493,8 @@
             </section>
         </div>
 
-        <!-- ===== AUX INPUTS + SAMPLER ===== -->
-        <div class="aux-row">
+        <!-- ===== AUX INPUTS + SAMPLER (PRO) ===== -->
+        <div class="aux-row pro-only">
 
             <!-- MIC CHANNEL -->
             <section class="aux-section mic-section">
@@ -543,8 +576,8 @@
         <!-- ===== LIBRARY + PLAYLISTS + SETLIST ===== -->
         <div class="bottom-row">
 
-            <!-- Playlists sidebar -->
-            <section class="playlists-sidebar" id="playlists-sidebar">
+            <!-- Playlists sidebar (PRO) -->
+            <section class="playlists-sidebar pro-only" id="playlists-sidebar">
                 <div class="playlists-header">
                     <h3 class="library-title">PLAYLISTS</h3>
                     <button class="btn-toolbar btn-sm" id="playlist-create" title="New playlist">+ NEW</button>
@@ -552,9 +585,19 @@
                 <div class="playlist-list" id="playlist-list"></div>
             </section>
 
-            <section class="library" id="library">
+            <section class="library" id="library" data-tutorial="library">
                 <div class="library-header">
-                    <h3 class="library-title">LIBRARY</h3>
+                    <div class="library-tabs">
+                        <button class="library-tab active" data-tab="local">LOCAL</button>
+                        <button class="library-tab" data-tab="liked">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                            LIKED
+                        </button>
+                        <button class="library-tab" data-tab="audius">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v12M8 9.5l4-3.5 4 3.5M8 14.5l4 3.5 4-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            AUDIUS
+                        </button>
+                    </div>
                     <input type="search" id="library-search" class="library-search" placeholder="Search tracks...">
                 </div>
                 <div class="library-table-wrapper">
@@ -576,7 +619,7 @@
                 </div>
             </section>
 
-            <section class="setlist-panel" id="setlist-panel">
+            <section class="setlist-panel pro-only" id="setlist-panel">
                 <div class="setlist-header">
                     <h3 class="library-title">SETLIST</h3>
                     <div class="setlist-actions-bar">
@@ -585,7 +628,7 @@
                     </div>
                 </div>
                 <div class="setlist-queue" id="setlist-queue">
-                    <div class="setlist-empty">Queue empty — add tracks from library</div>
+                    <div class="setlist-empty">Queue empty -- add tracks from library</div>
                 </div>
                 <div class="setlist-divider">
                     <span>HISTORY</span>
@@ -639,12 +682,26 @@
 
     </div>
 
+    <!-- ===== TUTORIAL OVERLAY ===== -->
+    <div class="tutorial-overlay" id="tutorial-overlay" style="display:none;">
+        <div class="tutorial-backdrop" id="tutorial-backdrop"></div>
+        <div class="tutorial-spotlight" id="tutorial-spotlight"></div>
+        <div class="tutorial-tooltip" id="tutorial-tooltip">
+            <div class="tutorial-step-indicator" id="tutorial-step-indicator"></div>
+            <h3 class="tutorial-title" id="tutorial-title"></h3>
+            <p class="tutorial-desc" id="tutorial-desc"></p>
+            <div class="tutorial-actions">
+                <button class="tutorial-btn tutorial-btn-skip" id="tutorial-skip">Skip</button>
+                <button class="tutorial-btn tutorial-btn-next" id="tutorial-next">Next</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
     <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/timeline.min.js"></script>
     <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
     <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/minimap.min.js"></script>
     <script>
-        // Verify WaveSurfer plugins loaded (UMD registers on window.WaveSurfer)
         if (typeof WaveSurfer !== 'undefined') {
             console.log('WaveSurfer loaded:', !!WaveSurfer, 'Minimap:', !!WaveSurfer.Minimap, 'Timeline:', !!WaveSurfer.Timeline, 'Regions:', !!WaveSurfer.Regions);
         }
@@ -654,6 +711,228 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').catch(() => {});
         }
+    </script>
+
+    <!-- Pro Mode + Tutorial Controller -->
+    <script>
+    (function() {
+        'use strict';
+
+        // ============ PRO MODE ============
+        const PRO_KEY = 'aurdour-pro-mode';
+        const proToggle = document.getElementById('pro-mode-toggle');
+        const proIconOff = proToggle?.querySelector('.pro-icon-off');
+        const proIconOn = proToggle?.querySelector('.pro-icon-on');
+
+        function setProMode(enabled, animate) {
+            if (enabled) {
+                document.body.classList.add('pro-mode');
+                if (animate) document.body.classList.add('pro-animating');
+            } else {
+                document.body.classList.remove('pro-mode');
+                if (animate) document.body.classList.add('pro-animating');
+            }
+            proToggle?.classList.toggle('active', enabled);
+            if (proIconOff) proIconOff.classList.toggle('hidden', enabled);
+            if (proIconOn) proIconOn.classList.toggle('hidden', !enabled);
+            localStorage.setItem(PRO_KEY, enabled ? '1' : '0');
+
+            if (animate) {
+                setTimeout(() => document.body.classList.remove('pro-animating'), 500);
+            }
+        }
+
+        // Restore saved state
+        const savedPro = localStorage.getItem(PRO_KEY);
+        if (savedPro === '1') setProMode(true, false);
+
+        proToggle?.addEventListener('click', () => {
+            const isOn = document.body.classList.contains('pro-mode');
+            setProMode(!isOn, true);
+        });
+
+        // ============ TUTORIAL ============
+        const TUTORIAL_KEY = 'aurdour-tutorial-done';
+
+        const tutorial = {
+            overlay: document.getElementById('tutorial-overlay'),
+            backdrop: document.getElementById('tutorial-backdrop'),
+            spotlight: document.getElementById('tutorial-spotlight'),
+            tooltip: document.getElementById('tutorial-tooltip'),
+            title: document.getElementById('tutorial-title'),
+            desc: document.getElementById('tutorial-desc'),
+            indicator: document.getElementById('tutorial-step-indicator'),
+            nextBtn: document.getElementById('tutorial-next'),
+            skipBtn: document.getElementById('tutorial-skip'),
+            restartBtn: document.getElementById('tutorial-restart'),
+            step: 0,
+
+            steps: [
+                {
+                    target: null,
+                    title: 'Welcome to AURDOUR DJ',
+                    desc: 'A powerful DJ platform made simple. Let\'s learn the basics — this takes about 30 seconds.',
+                },
+                {
+                    target: '#deck-a .deck-header',
+                    title: 'Meet Deck A',
+                    desc: 'Each deck shows the track name, BPM, and key. You have two decks — A on the left, B on the right — to mix between.',
+                },
+                {
+                    target: '[data-tutorial="transport"]',
+                    title: 'Play, Cue & Sync',
+                    desc: 'Hit the big play button to start the music. CUE sets a return point. SYNC matches tempo to the other deck.',
+                },
+                {
+                    target: '[data-tutorial="crossfader"]',
+                    title: 'The Crossfader',
+                    desc: 'Slide left to hear Deck A, right for Deck B, or anywhere in between to blend them together.',
+                },
+                {
+                    target: '[data-tutorial="library"]',
+                    title: 'Your Music Library',
+                    desc: 'Browse your tracks here. Switch to the AUDIUS tab to stream millions of free tracks. Click A or B to load onto a deck.',
+                },
+                {
+                    target: '[data-tutorial="flow"]',
+                    title: 'Flow Mode — Auto DJ',
+                    desc: 'Not sure where to start? Flow Mode picks tracks and mixes them automatically. Just sit back and enjoy.',
+                },
+                {
+                    target: '[data-tutorial="pro"]',
+                    title: 'Unlock Pro Controls',
+                    desc: 'When you\'re ready, toggle Pro Mode to access EQ, effects, loops, hot cues, jog wheels, stem separation, and more.',
+                },
+            ],
+
+            show() {
+                this.step = 0;
+                this.overlay.style.display = '';
+                document.body.style.overflow = 'hidden';
+                this.render();
+            },
+
+            hide() {
+                this.overlay.style.display = 'none';
+                document.body.style.overflow = '';
+                localStorage.setItem(TUTORIAL_KEY, '1');
+            },
+
+            next() {
+                this.step++;
+                if (this.step >= this.steps.length) {
+                    this.hide();
+                } else {
+                    this.render();
+                }
+            },
+
+            render() {
+                const s = this.steps[this.step];
+                this.title.textContent = s.title;
+                this.desc.textContent = s.desc;
+                this.nextBtn.textContent = this.step === this.steps.length - 1 ? 'Get Started' : 'Next';
+
+                // Step dots
+                this.indicator.innerHTML = this.steps.map((_, i) =>
+                    '<span class="tutorial-dot' + (i === this.step ? ' active' : '') + '"></span>'
+                ).join('');
+
+                if (!s.target) {
+                    // Welcome step — centered card, full backdrop, no spotlight
+                    this.backdrop.style.display = '';
+                    this.spotlight.style.display = 'none';
+                    this.tooltip.className = 'tutorial-tooltip tutorial-center';
+                    this.tooltip.removeAttribute('style');
+                } else {
+                    const el = document.querySelector(s.target);
+                    if (!el) { this.next(); return; }
+
+                    const rect = el.getBoundingClientRect();
+                    const pad = 14;
+
+                    // Hide backdrop, spotlight box-shadow creates the dimming
+                    this.backdrop.style.display = 'none';
+                    this.spotlight.style.display = '';
+                    this.spotlight.style.top = (rect.top - pad) + 'px';
+                    this.spotlight.style.left = (rect.left - pad) + 'px';
+                    this.spotlight.style.width = (rect.width + pad * 2) + 'px';
+                    this.spotlight.style.height = (rect.height + pad * 2) + 'px';
+
+                    // Smart tooltip positioning — auto-detect best placement
+                    this.tooltip.className = 'tutorial-tooltip';
+                    this.tooltip.removeAttribute('style');
+
+                    const tooltipW = 360;
+                    const tooltipH = 180; // approximate
+                    const gap = 16;
+                    const vw = window.innerWidth;
+                    const vh = window.innerHeight;
+
+                    // Horizontal: try to align left edge with element, clamp to viewport
+                    let tx = Math.max(20, Math.min(rect.left, vw - tooltipW - 20));
+
+                    // Vertical: prefer below, then above, then right side
+                    const spaceBelow = vh - rect.bottom - gap;
+                    const spaceAbove = rect.top - gap;
+                    const spaceRight = vw - rect.right - gap;
+
+                    this.tooltip.style.position = 'fixed';
+                    this.tooltip.style.maxWidth = tooltipW + 'px';
+
+                    if (spaceBelow >= tooltipH) {
+                        // Place below
+                        this.tooltip.style.top = (rect.bottom + gap) + 'px';
+                        this.tooltip.style.left = tx + 'px';
+                    } else if (spaceAbove >= tooltipH) {
+                        // Place above
+                        this.tooltip.style.bottom = (vh - rect.top + gap) + 'px';
+                        this.tooltip.style.left = tx + 'px';
+                    } else if (spaceRight >= tooltipW + 40) {
+                        // Place to the right
+                        this.tooltip.style.top = Math.max(20, rect.top) + 'px';
+                        this.tooltip.style.left = (rect.right + gap) + 'px';
+                    } else {
+                        // Fallback: overlay centered in viewport
+                        this.tooltip.style.top = '50%';
+                        this.tooltip.style.left = '50%';
+                        this.tooltip.style.transform = 'translate(-50%, -50%)';
+                    }
+                }
+            }
+        };
+
+        tutorial.nextBtn?.addEventListener('click', () => tutorial.next());
+        tutorial.skipBtn?.addEventListener('click', () => tutorial.hide());
+        tutorial.restartBtn?.addEventListener('click', () => {
+            localStorage.removeItem(TUTORIAL_KEY);
+            tutorial.show();
+        });
+
+        // Auto-show on first visit (delay lets the page render)
+        if (!localStorage.getItem(TUTORIAL_KEY)) {
+            setTimeout(() => tutorial.show(), 1000);
+        }
+
+        // ============ DECK HINT HIDING ============
+        // Hide empty state hints when tracks are loaded (observe title text changes)
+        function watchDeckHint(deckId) {
+            const titleEl = document.getElementById(`deck-${deckId}-title`);
+            const hintEl = document.getElementById(`deck-${deckId}-hint`);
+            if (!titleEl || !hintEl) return;
+
+            const check = () => {
+                const hasTrack = titleEl.textContent && titleEl.textContent !== 'No Track Loaded';
+                hintEl.classList.toggle('hint-hidden', hasTrack);
+            };
+
+            check();
+            const obs = new MutationObserver(check);
+            obs.observe(titleEl, { childList: true, characterData: true, subtree: true });
+        }
+        watchDeckHint('a');
+        watchDeckHint('b');
+    })();
     </script>
 </body>
 </html>

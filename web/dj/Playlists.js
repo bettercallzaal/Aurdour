@@ -7,6 +7,7 @@ export class Playlists {
         this.ratings = this.storage.get('ratings', {}); // trackId → 1-5
         this.playCounts = this.storage.get('playCounts', {});
         this.recentlyPlayed = this.storage.get('recentlyPlayed', []);
+        this.likedTracks = this.storage.get('likedTracks', []); // array of track objects
         this.activePlaylist = null;
         this.onFilterChange = null; // callback to re-render library
 
@@ -150,6 +151,33 @@ export class Playlists {
             .sort((a, b) => b.score - a.score)
             .slice(0, 10)
             .map(r => r.track);
+    }
+
+    // ===== Liked Tracks =====
+
+    toggleLike(track) {
+        const trackKey = track.source === 'audius' ? `audius:${track.id}` : (track.dataFile || track.id);
+        const idx = this.likedTracks.findIndex(t =>
+            (t.source === 'audius' ? `audius:${t.id}` : (t.dataFile || t.id)) === trackKey
+        );
+        if (idx >= 0) {
+            this.likedTracks.splice(idx, 1);
+        } else {
+            this.likedTracks.unshift({ ...track, likedAt: Date.now() });
+        }
+        this._save('likedTracks');
+        return idx < 0; // returns true if now liked
+    }
+
+    isLiked(track) {
+        const trackKey = track.source === 'audius' ? `audius:${track.id}` : (track.dataFile || track.id);
+        return this.likedTracks.some(t =>
+            (t.source === 'audius' ? `audius:${t.id}` : (t.dataFile || t.id)) === trackKey
+        );
+    }
+
+    getLikedTracks() {
+        return [...this.likedTracks];
     }
 
     _save(key) {

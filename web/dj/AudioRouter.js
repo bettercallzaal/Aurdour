@@ -118,14 +118,20 @@ export class AudioRouter {
 
     async resume() {
         if (this.ctx.state === 'suspended') {
+            console.log(`[AUDIO:ROUTER] Resuming AudioContext (was: ${this.ctx.state})...`);
             await this.ctx.resume();
+            console.log(`[AUDIO:ROUTER] AudioContext resumed → state: ${this.ctx.state}`);
         }
     }
 
     // ===== DECK ROUTING =====
 
     connectDeckSource(deckId, audioElement) {
+        console.log(`[AUDIO:ROUTER] connectDeckSource(${deckId}) — audioElement:`, audioElement?.tagName, `src="${audioElement?.src?.substring(0, 80)}..." paused=${audioElement?.paused}`);
+        console.log(`[AUDIO:ROUTER]   AudioContext state: ${this.ctx.state} | sampleRate: ${this.ctx.sampleRate}`);
+
         if (this._sourceNodes[deckId]) {
+            console.log(`[AUDIO:ROUTER]   Disconnecting previous source for Deck ${deckId}`);
             try {
                 this._sourceNodes[deckId].disconnect();
             } catch (e) { /* already disconnected */ }
@@ -133,6 +139,8 @@ export class AudioRouter {
         const source = this.ctx.createMediaElementSource(audioElement);
         this._sourceNodes[deckId] = source;
         source.connect(this.channels[deckId].eqLow);
+        console.log(`[AUDIO:ROUTER]   Deck ${deckId} audio chain connected: MediaElementSource → EQ Low → EQ Mid → EQ High → ChannelGain → CrossfadeGain → Analyser → MasterGain → Destination`);
+        console.log(`[AUDIO:ROUTER]   Channel gains — channelGain: ${this.channels[deckId].channelGain.gain.value}, crossfadeGain: ${this.channels[deckId].crossfadeGain.gain.value}, masterGain: ${this.masterGain.gain.value}`);
     }
 
     // ===== PFL / CUE =====
@@ -221,6 +229,7 @@ export class AudioRouter {
     // ===== MIC =====
 
     async connectMic() {
+        console.log('[AUDIO:MIC] Requesting microphone access...');
         try {
             await this.resume();
             this.mic.stream = await navigator.mediaDevices.getUserMedia({
@@ -230,11 +239,16 @@ export class AudioRouter {
                     autoGainControl: false,
                 }
             });
+            const tracks = this.mic.stream.getAudioTracks();
+            console.log(`[AUDIO:MIC] Mic access GRANTED — ${tracks.length} audio track(s)`);
+            tracks.forEach((t, i) => console.log(`[AUDIO:MIC]   Track ${i}: "${t.label}" enabled=${t.enabled} muted=${t.muted} settings=`, t.getSettings()));
             this.mic.source = this.ctx.createMediaStreamSource(this.mic.stream);
             this.mic.source.connect(this.mic.eqLow);
+            console.log('[AUDIO:MIC] Mic chain: MicSource → EQ Low → EQ Mid → EQ High → Gain → Analyser → MasterGain');
+            console.log('[AUDIO:MIC] NOTE: Mic starts MUTED. Click UNMUTE or press M to hear it.');
             return true;
         } catch (err) {
-            console.error('Mic access denied:', err);
+            console.error('[AUDIO:MIC] Mic access DENIED:', err.name, err.message);
             return false;
         }
     }
@@ -277,6 +291,7 @@ export class AudioRouter {
     // ===== SYSTEM AUDIO =====
 
     async connectSystemAudio() {
+        console.log('[AUDIO:SYSTEM] Requesting system audio capture (screen share with audio)...');
         try {
             await this.resume();
             this.system.stream = await navigator.mediaDevices.getDisplayMedia({
@@ -284,26 +299,35 @@ export class AudioRouter {
                 audio: true,
             });
 
-            this.system.stream.getVideoTracks().forEach(t => t.stop());
+            this.system.stream.getVideoTracks().forEach(t => {
+                console.log(`[AUDIO:SYSTEM] Stopping video track: "${t.label}"`);
+                t.stop();
+            });
 
             const audioTracks = this.system.stream.getAudioTracks();
             if (audioTracks.length === 0) {
-                console.warn('No audio track in screen share');
+                console.warn('[AUDIO:SYSTEM] No audio track in screen share! Make sure to check "Share audio" in the dialog.');
                 return false;
             }
+
+            console.log(`[AUDIO:SYSTEM] Got ${audioTracks.length} audio track(s):`);
+            audioTracks.forEach((t, i) => console.log(`[AUDIO:SYSTEM]   Track ${i}: "${t.label}" enabled=${t.enabled}`));
 
             const audioStream = new MediaStream(audioTracks);
             this.system.source = this.ctx.createMediaStreamSource(audioStream);
             this.system.source.connect(this.system.gain);
             this.system.active = true;
+            console.log('[AUDIO:SYSTEM] System audio chain: SystemSource → Gain → Analyser → MasterGain → Destination');
+            console.log('[AUDIO:SYSTEM] System audio capture ACTIVE');
 
             audioTracks[0].onended = () => {
+                console.log('[AUDIO:SYSTEM] Audio track ended — disconnecting');
                 this.disconnectSystemAudio();
             };
 
             return true;
         } catch (err) {
-            console.error('System audio capture failed:', err);
+            console.error('[AUDIO:SYSTEM] System audio capture FAILED:', err.name, err.message);
             return false;
         }
     }

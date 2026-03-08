@@ -1,6 +1,42 @@
 // MidiController.js — Web MIDI API support for hardware DJ controllers
 // Built-in Pioneer DDJ Serato mappings + MIDI learn fallback
 
+// ── DEBUG HELPERS ───────────────────────────────────────────────
+const DEBUG = true;
+const _debugStyles = {
+    midi:   'background:#1a1a2e;color:#00ff88;padding:2px 6px;border-radius:3px;font-weight:bold',
+    note:   'background:#2d1b69;color:#e040fb;padding:2px 6px;border-radius:3px',
+    cc:     'background:#1b3a4b;color:#00bcd4;padding:2px 6px;border-radius:3px',
+    action: 'background:#4a1942;color:#ff6f00;padding:2px 6px;border-radius:3px;font-weight:bold',
+    jog:    'background:#1b4332;color:#95d5b2;padding:2px 6px;border-radius:3px',
+    eq:     'background:#3d2645;color:#ffd54f;padding:2px 6px;border-radius:3px',
+    vol:    'background:#1a237e;color:#82b1ff;padding:2px 6px;border-radius:3px',
+    error:  'background:#b71c1c;color:#fff;padding:2px 6px;border-radius:3px;font-weight:bold',
+    info:   'background:#004d40;color:#a7ffeb;padding:2px 6px;border-radius:3px',
+};
+function _midiLog(category, ...args) {
+    if (!DEBUG) return;
+    const style = _debugStyles[category] || _debugStyles.info;
+    console.log(`%c[MIDI:${category.toUpperCase()}]`, style, ...args);
+}
+function _hexByte(b) { return '0x' + (b & 0xFF).toString(16).toUpperCase().padStart(2, '0'); }
+function _hexMsg(data) { return Array.from(data).map(b => _hexByte(b)).join(' '); }
+function _midiTypeName(type) {
+    switch (type) {
+        case 0x80: return 'NOTE_OFF';
+        case 0x90: return 'NOTE_ON';
+        case 0xA0: return 'POLY_AT';
+        case 0xB0: return 'CC';
+        case 0xC0: return 'PROG_CHG';
+        case 0xD0: return 'CHAN_AT';
+        case 0xE0: return 'PITCH_BEND';
+        default: return `UNKNOWN(${_hexByte(type)})`;
+    }
+}
+// Message rate throttle for high-frequency CCs (jog, faders)
+let _msgCount = 0;
+let _msgCountInterval = null;
+
 const PIONEER_DDJ = {
     name: 'Pioneer DDJ',
     detect: (deviceName) => /pioneer|ddj|serato/i.test(deviceName),
@@ -89,17 +125,32 @@ export class MidiController {
 
     async _requestMIDI() {
         if (!navigator.requestMIDIAccess) {
-            console.log('Web MIDI not supported in this browser');
+            _midiLog('error', 'Web MIDI API not supported in this browser!');
             this._updateStatus('Not supported');
             return;
         }
 
+        _midiLog('info', 'Requesting MIDI access (sysex: false)...');
+
         try {
             this.midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+            _midiLog('info', 'MIDI access GRANTED');
+            _midiLog('info', `Inputs: ${this.midiAccess.inputs.size}, Outputs: ${this.midiAccess.outputs.size}`);
             this._onMIDISuccess();
-            this.midiAccess.onstatechange = () => this._onMIDISuccess();
+            this.midiAccess.onstatechange = (e) => {
+                _midiLog('info', `MIDI state change: port="${e.port.name}" type=${e.port.type} state=${e.port.state} connection=${e.port.connection}`);
+                this._onMIDISuccess();
+            };
+
+            // Start message rate counter
+            _msgCountInterval = setInterval(() => {
+                if (_msgCount > 0) {
+                    _midiLog('info', `Message rate: ${_msgCount} msgs/sec`);
+                    _msgCount = 0;
+                }
+            }, 1000);
         } catch (err) {
-            console.warn('MIDI access denied:', err);
+            _midiLog('error', 'MIDI access DENIED:', err.message, err);
             this._updateStatus('Denied');
         }
     }
@@ -108,12 +159,16 @@ export class MidiController {
         this.devices = [];
         this._outputs = [];
 
-        this.midiAccess.inputs.forEach(input => {
+        _midiLog('info', '── Enumerating MIDI ports ──');
+
+        this.midiAccess.inputs.forEach((input, id) => {
+            _midiLog('info', `  INPUT: "${input.name}" id=${id} manufacturer="${input.manufacturer}" state=${input.state} connection=${input.connection}`);
             this.devices.push(input.name);
             input.onmidimessage = (msg) => this._onMIDIMessage(msg);
         });
 
-        this.midiAccess.outputs.forEach(output => {
+        this.midiAccess.outputs.forEach((output, id) => {
+            _midiLog('info', `  OUTPUT: "${output.name}" id=${id} manufacturer="${output.manufacturer}" state=${output.state}`);
             this._outputs.push(output);
         });
 
@@ -123,15 +178,20 @@ export class MidiController {
             this._updateStatus(name);
 
             // Auto-detect Pioneer DDJ
+            _midiLog('info', `Testing Pioneer DDJ detection for: "${name}"...`);
             if (PIONEER_DDJ.detect(name)) {
                 this.activeProfile = 'pioneer-ddj';
                 this._updateStatus(`${name} ✓`);
-                console.log('Pioneer DDJ detected — using built-in mappings');
+                _midiLog('midi', `Pioneer DDJ DETECTED: "${name}" — using built-in mappings`);
+                _midiLog('midi', 'Mapped channels: Deck1=CH0, Deck2=CH1, Global=CH6, Pads1=CH7, Pads2=CH9');
+            } else {
+                _midiLog('info', `Not a Pioneer DDJ device. Using custom/learn mappings. (Regex: /pioneer|ddj|serato/i)`);
             }
         } else {
             this.connected = false;
             this.activeProfile = null;
             this._updateStatus('No device');
+            _midiLog('info', 'No MIDI devices found. Connect a controller and it will auto-detect.');
         }
 
         this._renderDeviceList();
@@ -141,11 +201,19 @@ export class MidiController {
         const [status, data1, data2] = msg.data;
         const channel = status & 0x0F;
         const type = status & 0xF0;
+        _msgCount++;
+
+        // Raw message log (throttled for CCs to avoid flood)
+        const isHighFreq = (type === 0xB0 && (data1 === PIONEER_DDJ.CC_JOG_VINYL || data1 === PIONEER_DDJ.CC_JOG_RING));
+        if (!isHighFreq) {
+            _midiLog('midi', `RAW: ${_hexMsg(msg.data)}  |  ${_midiTypeName(type)} ch=${channel} data1=${_hexByte(data1)}(${data1}) data2=${_hexByte(data2)}(${data2})`);
+        }
 
         // MIDI Learn mode — intercept
         if (this.learning && this.learnTarget) {
             const key = `${channel}_${data1}_${type === 0xB0 ? 'cc' : 'note'}`;
             this.mappings[key] = this.learnTarget;
+            _midiLog('action', `MIDI LEARN: mapped ${key} → "${this.learnTarget}"`);
             this.learning = false;
             this.learnTarget = null;
             this._updateStatus('Mapped!');
@@ -174,12 +242,23 @@ export class MidiController {
             // Transport — Deck channels (0/1)
             if (deckId) {
                 switch (data1) {
-                    case P.NOTE_PLAY: this._deckAction(deckId, 'playPause'); return;
-                    case P.NOTE_CUE: this._deckAction(deckId, 'cue'); return;
-                    case P.NOTE_SYNC: this._deckAction(deckId, 'sync'); return;
-                    case P.NOTE_PFL: this._togglePFL(deckId); return;
-                    case P.NOTE_SHIFT: this._shift[channel] = true; return;
+                    case P.NOTE_PLAY:
+                        _midiLog('note', `▶ PLAY/PAUSE pressed — Deck ${deckId}`);
+                        this._deckAction(deckId, 'playPause'); return;
+                    case P.NOTE_CUE:
+                        _midiLog('note', `⏺ CUE pressed — Deck ${deckId}`);
+                        this._deckAction(deckId, 'cue'); return;
+                    case P.NOTE_SYNC:
+                        _midiLog('note', `🔄 SYNC pressed — Deck ${deckId}`);
+                        this._deckAction(deckId, 'sync'); return;
+                    case P.NOTE_PFL:
+                        _midiLog('note', `🎧 PFL pressed — Deck ${deckId}`);
+                        this._togglePFL(deckId); return;
+                    case P.NOTE_SHIFT:
+                        _midiLog('note', `⇧ SHIFT pressed — Deck ${deckId} (ch=${channel})`);
+                        this._shift[channel] = true; return;
                 }
+                _midiLog('note', `UNHANDLED note on Deck ${deckId}: note=${_hexByte(data1)} vel=${data2}`);
             }
 
             // Hot cue pads — channels 7 (deck1) / 9 (deck2)
@@ -187,28 +266,46 @@ export class MidiController {
                 const padDeck = channel === P.CH_PADS1 ? 'A' : 'B';
                 if (data1 >= P.PAD_HOTCUE_BASE && data1 <= P.PAD_HOTCUE_BASE + 7) {
                     const padIdx = data1 - P.PAD_HOTCUE_BASE;
+                    _midiLog('note', `🔲 PAD ${padIdx + 1} pressed — Deck ${padDeck} (ch=${channel})`);
                     this._deckAction(padDeck, 'hotcue', padIdx);
                     return;
                 }
+                _midiLog('note', `UNHANDLED pad note: ch=${channel} note=${_hexByte(data1)} vel=${data2}`);
             }
 
             // Global channel (6)
             if (channel === P.CH_GLOBAL) {
                 switch (data1) {
-                    case P.NOTE_LOAD_DECK1: this._loadToDeck('A'); return;
-                    case P.NOTE_LOAD_DECK2: this._loadToDeck('B'); return;
-                    case P.NOTE_BROWSE_PRESS: /* browse push — select track */ return;
-                    case P.NOTE_BACK: /* back button */ return;
+                    case P.NOTE_LOAD_DECK1:
+                        _midiLog('note', `📥 LOAD TO DECK A`);
+                        this._loadToDeck('A'); return;
+                    case P.NOTE_LOAD_DECK2:
+                        _midiLog('note', `📥 LOAD TO DECK B`);
+                        this._loadToDeck('B'); return;
+                    case P.NOTE_BROWSE_PRESS:
+                        _midiLog('note', `🔍 BROWSE PRESS (encoder push)`);
+                        return;
+                    case P.NOTE_BACK:
+                        _midiLog('note', `⬅ BACK button`);
+                        return;
                 }
+                _midiLog('note', `UNHANDLED global note: note=${_hexByte(data1)} vel=${data2}`);
+            }
+
+            // Completely unhandled note on
+            if (!deckId && channel !== P.CH_PADS1 && channel !== P.CH_PADS2 && channel !== P.CH_GLOBAL) {
+                _midiLog('note', `??? UNKNOWN NOTE ON: ch=${channel} note=${_hexByte(data1)} vel=${data2}`);
             }
         }
 
         // Note Off / Note On velocity 0
         if (type === 0x80 || (type === 0x90 && data2 === 0)) {
             if (deckId && data1 === P.NOTE_SHIFT) {
+                _midiLog('note', `⇧ SHIFT released — Deck ${deckId}`);
                 this._shift[channel] = false;
                 return;
             }
+            // Don't log every note-off to reduce noise, but log unhandled ones
         }
 
         // Control Change
@@ -224,34 +321,54 @@ export class MidiController {
                 this._handleGlobalCC(data1, data2);
                 return;
             }
+
+            _midiLog('cc', `??? UNKNOWN CC: ch=${channel} cc=${_hexByte(data1)} val=${data2}`);
         }
     }
 
     _handleDeckCC(deckId, channel, cc, value) {
         const P = PIONEER_DDJ;
         const router = this.dj.audioRouter;
-        if (!router) return;
+        if (!router) {
+            _midiLog('error', `AudioRouter not available! Deck ${deckId} CC ${_hexByte(cc)} ignored`);
+            return;
+        }
 
         switch (cc) {
             // 14-bit EQ High
-            case P.CC_EQ_HIGH_MSB: this._storeMSB(channel, cc, value); this._apply14bitEQ(deckId, channel, cc, 'high'); return;
-            case P.CC_EQ_HIGH_LSB: this._apply14bitEQ(deckId, channel, P.CC_EQ_HIGH_MSB, 'high', value); return;
+            case P.CC_EQ_HIGH_MSB:
+                _midiLog('eq', `EQ HIGH MSB — Deck ${deckId}: ${value}`);
+                this._storeMSB(channel, cc, value); this._apply14bitEQ(deckId, channel, cc, 'high'); return;
+            case P.CC_EQ_HIGH_LSB:
+                this._apply14bitEQ(deckId, channel, P.CC_EQ_HIGH_MSB, 'high', value); return;
 
             // 14-bit EQ Mid
-            case P.CC_EQ_MID_MSB: this._storeMSB(channel, cc, value); this._apply14bitEQ(deckId, channel, cc, 'mid'); return;
-            case P.CC_EQ_MID_LSB: this._apply14bitEQ(deckId, channel, P.CC_EQ_MID_MSB, 'mid', value); return;
+            case P.CC_EQ_MID_MSB:
+                _midiLog('eq', `EQ MID MSB — Deck ${deckId}: ${value}`);
+                this._storeMSB(channel, cc, value); this._apply14bitEQ(deckId, channel, cc, 'mid'); return;
+            case P.CC_EQ_MID_LSB:
+                this._apply14bitEQ(deckId, channel, P.CC_EQ_MID_MSB, 'mid', value); return;
 
             // 14-bit EQ Low
-            case P.CC_EQ_LOW_MSB: this._storeMSB(channel, cc, value); this._apply14bitEQ(deckId, channel, cc, 'low'); return;
-            case P.CC_EQ_LOW_LSB: this._apply14bitEQ(deckId, channel, P.CC_EQ_LOW_MSB, 'low', value); return;
+            case P.CC_EQ_LOW_MSB:
+                _midiLog('eq', `EQ LOW MSB — Deck ${deckId}: ${value}`);
+                this._storeMSB(channel, cc, value); this._apply14bitEQ(deckId, channel, cc, 'low'); return;
+            case P.CC_EQ_LOW_LSB:
+                this._apply14bitEQ(deckId, channel, P.CC_EQ_LOW_MSB, 'low', value); return;
 
             // 14-bit Volume fader
-            case P.CC_VOL_MSB: this._storeMSB(channel, cc, value); this._apply14bitVolume(deckId, channel, cc); return;
-            case P.CC_VOL_LSB: this._apply14bitVolume(deckId, channel, P.CC_VOL_MSB, value); return;
+            case P.CC_VOL_MSB:
+                _midiLog('vol', `VOLUME MSB — Deck ${deckId}: ${value}`);
+                this._storeMSB(channel, cc, value); this._apply14bitVolume(deckId, channel, cc); return;
+            case P.CC_VOL_LSB:
+                this._apply14bitVolume(deckId, channel, P.CC_VOL_MSB, value); return;
 
             // 14-bit Tempo slider
-            case P.CC_TEMPO_MSB: this._storeMSB(channel, cc, value); this._apply14bitTempo(deckId, channel, cc); return;
-            case P.CC_TEMPO_LSB: this._apply14bitTempo(deckId, channel, P.CC_TEMPO_MSB, value); return;
+            case P.CC_TEMPO_MSB:
+                _midiLog('cc', `TEMPO MSB — Deck ${deckId}: ${value}`);
+                this._storeMSB(channel, cc, value); this._apply14bitTempo(deckId, channel, cc); return;
+            case P.CC_TEMPO_LSB:
+                this._apply14bitTempo(deckId, channel, P.CC_TEMPO_MSB, value); return;
 
             // Jog wheel — vinyl surface (scratch)
             case P.CC_JOG_VINYL: this._handleJogWheel(deckId, value, true); return;
@@ -260,19 +377,27 @@ export class MidiController {
             case P.CC_JOG_RING: this._handleJogWheel(deckId, value, false); return;
 
             // Filter knob
-            case P.CC_FILTER_MSB: this._storeMSB(channel, cc, value); return;
-            case P.CC_FILTER_LSB: /* filter implementation */ return;
+            case P.CC_FILTER_MSB:
+                _midiLog('cc', `FILTER MSB — Deck ${deckId}: ${value}`);
+                this._storeMSB(channel, cc, value); return;
+            case P.CC_FILTER_LSB: return;
         }
+
+        _midiLog('cc', `UNHANDLED Deck ${deckId} CC: cc=${_hexByte(cc)} val=${value}`);
     }
 
     _handleGlobalCC(cc, value) {
         const P = PIONEER_DDJ;
         const router = this.dj.audioRouter;
-        if (!router) return;
+        if (!router) {
+            _midiLog('error', `AudioRouter not available! Global CC ${_hexByte(cc)} ignored`);
+            return;
+        }
 
         switch (cc) {
             // 14-bit Crossfader
             case P.CC_CROSSFADER_MSB:
+                _midiLog('vol', `CROSSFADER MSB: ${value}`);
                 this._storeMSB(P.CH_GLOBAL, cc, value);
                 this._apply14bitCrossfader(value);
                 return;
@@ -282,6 +407,7 @@ export class MidiController {
 
             // 14-bit Master volume
             case P.CC_MASTER_VOL_MSB:
+                _midiLog('vol', `MASTER VOL MSB: ${value}`);
                 this._storeMSB(P.CH_GLOBAL, cc, value);
                 this._apply14bitMaster(value);
                 return;
@@ -291,6 +417,7 @@ export class MidiController {
 
             // 14-bit Headphone mix (cue/master)
             case P.CC_HEADPHONE_MIX_MSB:
+                _midiLog('cc', `HEADPHONE MIX MSB: ${value}`);
                 this._storeMSB(P.CH_GLOBAL, cc, value);
                 this._apply14bitCueMix(value);
                 return;
@@ -300,6 +427,7 @@ export class MidiController {
 
             // 14-bit Headphone volume
             case P.CC_HEADPHONE_VOL_MSB:
+                _midiLog('cc', `HEADPHONE VOL MSB: ${value}`);
                 this._storeMSB(P.CH_GLOBAL, cc, value);
                 return;
             case P.CC_HEADPHONE_VOL_LSB:
@@ -307,9 +435,12 @@ export class MidiController {
 
             // Browse encoder (relative, centered at 64)
             case P.CC_BROWSE:
+                _midiLog('cc', `BROWSE encoder: raw=${value} delta=${value < 64 ? value : value - 128}`);
                 this._handleBrowseEncoder(value);
                 return;
         }
+
+        _midiLog('cc', `UNHANDLED Global CC: cc=${_hexByte(cc)} val=${value}`);
     }
 
     // ── 14-bit MSB/LSB Helpers ──────────────────────────────────
@@ -328,6 +459,7 @@ export class MidiController {
         const normalized = this._get14bit(channel, msbCC, lsb);
         // Map 0–1 to -24dB to +6dB
         const db = normalized * 30 - 24;
+        _midiLog('eq', `EQ ${band.toUpperCase()} Deck ${deckId}: normalized=${normalized.toFixed(3)} → ${db.toFixed(1)}dB`);
         const router = this.dj.audioRouter;
         if (router) router.setEQ(deckId, band, db);
 
@@ -339,6 +471,7 @@ export class MidiController {
 
     _apply14bitVolume(deckId, channel, msbCC, lsb) {
         const normalized = this._get14bit(channel, msbCC, lsb);
+        _midiLog('vol', `VOLUME Deck ${deckId}: normalized=${normalized.toFixed(3)} (${(normalized * 100).toFixed(1)}%)`);
         const router = this.dj.audioRouter;
         if (router) router.setChannelVolume(deckId, normalized);
 
@@ -352,9 +485,12 @@ export class MidiController {
         // 0.5 = center (no change), 0 = -8%, 1 = +8%
         const tempoAdjust = (normalized - 0.5) * 0.16;
         const deck = this.dj.decks?.[deckId];
+        _midiLog('cc', `TEMPO Deck ${deckId}: normalized=${normalized.toFixed(3)} adjust=${(tempoAdjust * 100).toFixed(2)}% rate=${(1 + tempoAdjust).toFixed(4)} baseBPM=${deck?.baseBPM || 'none'}`);
         if (deck && deck.baseBPM) {
             const newRate = 1 + tempoAdjust;
             deck.setPlaybackRate(newRate);
+        } else if (deck && !deck.baseBPM) {
+            _midiLog('info', `Tempo slider moved but Deck ${deckId} has no baseBPM set (no track loaded?)`);
         }
     }
 
@@ -362,6 +498,7 @@ export class MidiController {
         const P = PIONEER_DDJ;
         if (msb != null) this._storeMSB(P.CH_GLOBAL, P.CC_CROSSFADER_MSB, msb);
         const normalized = this._get14bit(P.CH_GLOBAL, P.CC_CROSSFADER_MSB, lsb);
+        _midiLog('vol', `CROSSFADER: normalized=${normalized.toFixed(3)} (A◄ ${(normalized * 100).toFixed(1)}% ►B)`);
         const router = this.dj.audioRouter;
         if (router) router.setCrossfade(normalized);
 
@@ -395,7 +532,12 @@ export class MidiController {
 
     _deckAction(deckId, action, param) {
         const deck = this.dj.decks?.[deckId];
-        if (!deck) return;
+        if (!deck) {
+            _midiLog('error', `Deck ${deckId} not found! Action "${action}" ignored. Available decks: ${Object.keys(this.dj.decks || {}).join(', ')}`);
+            return;
+        }
+
+        _midiLog('action', `DECK ${deckId} → ${action}${param != null ? ` (param=${param})` : ''} | loaded=${deck.isLoaded} playing=${deck.isPlaying}`);
 
         switch (action) {
             case 'playPause': deck.playPause(); break;
@@ -403,10 +545,15 @@ export class MidiController {
             case 'sync': {
                 const otherDeck = deckId === 'A' ? 'B' : 'A';
                 const bpm = this.dj.decks[otherDeck]?.getBPM();
+                _midiLog('action', `SYNC: Deck ${deckId} syncing to Deck ${otherDeck} BPM=${bpm || 'N/A'}`);
                 if (bpm) deck.syncTo(bpm);
+                else _midiLog('info', `Cannot sync — Deck ${otherDeck} has no BPM`);
                 break;
             }
-            case 'hotcue': deck.triggerHotCue(param); break;
+            case 'hotcue':
+                _midiLog('action', `HOT CUE ${param + 1} on Deck ${deckId} — cue exists: ${!!deck.hotCues?.[param]}`);
+                deck.triggerHotCue(param);
+                break;
         }
     }
 
@@ -419,7 +566,10 @@ export class MidiController {
         // Load the currently selected/highlighted track in the library
         const library = this.dj.library;
         if (library && library.selectedTrack) {
+            _midiLog('action', `LOAD TO DECK ${deckId}: track="${library.selectedTrack}"`);
             library.loadToDeck(library.selectedTrack, deckId);
+        } else {
+            _midiLog('info', `Load to Deck ${deckId} — no track selected in library (library=${!!library}, selectedTrack=${library?.selectedTrack})`);
         }
     }
 
@@ -437,6 +587,8 @@ export class MidiController {
 
         if (delta === 0) return;
 
+        _midiLog('jog', `JOG ${isVinyl ? 'VINYL' : 'RING'} Deck ${deckId}: raw=${value} delta=${delta} scaled=${(delta / 64).toFixed(3)}`);
+
         const jogWheel = this.dj.jogWheel;
         if (jogWheel) {
             // Scale delta for sensitivity
@@ -447,6 +599,7 @@ export class MidiController {
                 jogWheel.nudge(deckId, scaledDelta * 0.02);
             }
         } else {
+            _midiLog('info', 'JogWheel module not available, using fallback pitch bend');
             // Fallback: direct pitch bend
             const deck = this.dj.decks?.[deckId];
             if (deck) {
@@ -539,9 +692,14 @@ export class MidiController {
     // ── LED Feedback ────────────────────────────────────────────
 
     sendLED(channel, note, velocity) {
-        if (this._outputs.length === 0) return;
+        if (this._outputs.length === 0) {
+            _midiLog('info', `sendLED: no outputs available (ch=${channel} note=${_hexByte(note)} vel=${velocity})`);
+            return;
+        }
         const output = this._outputs[0];
-        output.send([0x90 | channel, note, velocity]);
+        const msg = [0x90 | channel, note, velocity];
+        _midiLog('midi', `LED OUT → ${output.name}: ${_hexMsg(msg)}`);
+        output.send(msg);
     }
 
     // ── UI ──────────────────────────────────────────────────────

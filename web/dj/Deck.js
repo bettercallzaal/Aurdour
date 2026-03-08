@@ -152,21 +152,47 @@ export class Deck {
             const audioFile = this.metadata.audio_files?.mp3;
             if (!audioFile) throw new Error('No MP3 file in metadata');
 
-            this.hotCues = new Array(8).fill(null);
-            this.cuePoint = 0;
-            this.isLoaded = false;
-            this.isPlaying = false;
-            this._nearEndFired = false;
-            this.loop = { active: false, inPoint: null, outPoint: null, region: null };
-            this.autoLoopBeats = null;
-            this.currentRate = 1.0;
-            this.beatPositions = [];
-
+            this._resetState();
             this.wavesurfer.load(audioFile);
             this._updateDeckUI();
         } catch (error) {
             console.error(`Deck ${this.id}: Failed to load track:`, error);
         }
+    }
+
+    // Load a track directly from a URL + metadata object (e.g. from Audius)
+    loadDirect(audioUrl, meta) {
+        try {
+            this.metadata = {
+                metadata: {
+                    title: meta.title || 'Unknown',
+                    artist: meta.artist || '',
+                    bpm: meta.bpm || null,
+                    key: meta.key || null,
+                },
+                audio_files: { mp3: audioUrl },
+                _source: meta.source || 'direct',
+                _sourceId: meta.id || null,
+            };
+
+            this._resetState();
+            this.wavesurfer.load(audioUrl);
+            this._updateDeckUI();
+        } catch (error) {
+            console.error(`Deck ${this.id}: Failed to load direct track:`, error);
+        }
+    }
+
+    _resetState() {
+        this.hotCues = new Array(8).fill(null);
+        this.cuePoint = 0;
+        this.isLoaded = false;
+        this.isPlaying = false;
+        this._nearEndFired = false;
+        this.loop = { active: false, inPoint: null, outPoint: null, region: null };
+        this.autoLoopBeats = null;
+        this.currentRate = 1.0;
+        this.beatPositions = [];
     }
 
     getMediaElement() {

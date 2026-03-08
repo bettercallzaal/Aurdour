@@ -1,104 +1,142 @@
-# Ardour to Web Audio Player
+# AURDOUR DJ
 
-Open-source workflow for exporting DJ sets from Ardour with markers and deploying them as interactive web audio experiences.
+A browser-based DJ platform with two decks, real-time mixing, effects, and streaming. Designed to be approachable for newcomers while offering full pro-level controls for experienced DJs.
 
-## 🎯 What This Does
+## Features
 
-- Export audio + markers from Ardour (DAW)
-- Convert markers to JSON for web consumption
-- Interactive web player with waveform visualization
-- Timestamp-based sharing (e.g., `?t=2m30s`)
-- Social-first, remixable audio experiences
+### Newcomer-Friendly Design
+- **Simple Mode** (default) — Clean layout showing only the essentials: two decks, play/cue/sync, crossfader, volume, jog wheels, and library
+- **Pro Mode** — Toggle to reveal advanced controls: EQ, FX, stems, loops, hot cues, pitch faders, sampler, mic input, MIDI mapping, and more
+- **Interactive Tutorial** — Step-by-step guided walkthrough on first visit, highlighting each key area with spotlight effects. Skippable and re-triggerable
+- **Empty State Hints** — Decks show guidance text when no track is loaded, directing users to the library or drag-and-drop
 
-## 📁 Project Structure
+### Core DJ Controls
+- Two full decks with WaveSurfer.js waveform visualization (overview + scrolling)
+- Transport: Play/Pause (large circular button), Cue, Sync
+- Crossfader with color-coded A/B endpoints and "slide to blend" hint
+- Per-channel volume faders and level meters
+- Jog wheels with drag-to-scratch and nudge buttons
+- Master and booth volume with metering
+
+### Pro Mode Controls
+- 3-band EQ (HI/MID/LOW) per channel
+- FX rack per deck (Echo, Reverb, Flanger, Filter, Delay) with wet/dry and parameter knobs
+- Stem separation (Bass, Drums, Vocals, Other) per deck
+- Loop controls (IN/OUT, halve, double, auto-loop 1/2/4/8/16 beats)
+- 8 hot cue pads per deck
+- Pitch fader with key lock and slip mode
+- Beat jump buttons
+- PFL/headphone cueing with split cue
+- Phase meter
+- Sampler with 8 pads
+- Mic and system audio capture
+- BPM tap tempo
+- MIDI controller support with learn mode and profiles
+- Recording (WebM/OGG/M4A)
+- Performance monitor (latency, CPU, buffer)
+
+### Music Sources
+- **Local** — Load tracks from a JSON manifest (`data/manifest.json`)
+- **Audius** — Search and stream from Audius' catalog of free music, with trending tracks on the default view
+- **Liked** — Heart any track to save it to your Liked playlist (persisted in localStorage)
+- **Drag & Drop** — Drop audio files directly onto a deck
+
+### Flow Mode (Auto-DJ)
+Click **AUTO MIX** to enter Flow Mode — the system picks tracks and crossfades between them automatically based on BPM, key, and genre compatibility. Great for parties or background listening.
+
+### Additional Features
+- Harmonic mixing with Camelot wheel key compatibility display
+- Playlists/crates with create, rename, and delete
+- Setlist queue with drag-to-reorder and play history
+- Auto-transition with configurable duration and curve
+- RGB waveform and beat grid quantize toggles
+- Visualizer overlay (bars mode)
+- Go Live with chat and song request support
+- PWA support with service worker caching
+
+## Quick Start
+
+```bash
+cd web && python3 -m http.server 8000
+```
+
+Open `http://localhost:8000` in your browser.
+
+### Loading Local Tracks
+
+Place audio files in `web/data/` and create a `web/data/manifest.json`:
+
+```json
+{
+  "tracks": [
+    {
+      "id": "track-1",
+      "title": "Track Name",
+      "artist": "Artist",
+      "bpm": 128,
+      "key": "Am",
+      "duration": 240,
+      "genre": "House",
+      "dataFile": "data/track-1.json"
+    }
+  ]
+}
+```
+
+Each track's `dataFile` JSON should contain:
+```json
+{
+  "metadata": { "title": "...", "artist": "...", "bpm": 128, "key": "Am" },
+  "audio_files": { "mp3": "data/track-1.mp3" }
+}
+```
+
+### Streaming from Audius
+
+Click the **AUDIUS** tab in the library to search or browse trending tracks. No setup required — streams directly from the Audius public API.
+
+## Project Structure
 
 ```
-.
-├── ardour/                 # Ardour export guides and scripts
-│   ├── EXPORT_GUIDE.md    # Step-by-step Ardour export instructions
-│   └── extract_markers.py # Python script to extract markers
-├── serato/                 # Serato DJ integration
-│   ├── SERATO_INTEGRATION.md  # Complete Serato guide
-│   └── convert_serato_history.py  # Convert Serato CSV to JSON
-├── web/                    # Web audio player
-│   ├── index.html         # Main player interface
-│   ├── player.js          # WaveSurfer.js implementation
-│   ├── styles.css         # Player styling
-│   └── data/              # Audio files and metadata
-│       └── example.json   # Example metadata schema
-├── docs/                   # Documentation
-│   ├── SCHEMA.md          # JSON schema documentation
-│   ├── DEPLOYMENT.md      # Deployment guide
-│   └── EXTENSIONS.md      # Ideas for extending functionality
-└── netlify.toml           # Deployment configuration
+web/
+  index.html          # Main interface (all element IDs for JS bindings)
+  styles.css          # Full stylesheet with Pro Mode toggle system
+  player.js           # Main controller — wires all modules together
+  dj/
+    Audius.js          # Audius API integration (search, trending, streaming)
+    AudioRouter.js     # Web Audio API routing (master, booth, headphone)
+    AutoTransition.js  # Automated crossfade transitions
+    Deck.js            # Deck controller (WaveSurfer, transport, load)
+    DragDrop.js        # Drag-and-drop file loading
+    FlowMode.js        # Auto-DJ engine with smart suggestions
+    HarmonicMixer.js   # Camelot wheel key compatibility
+    JogWheel.js        # Canvas jog wheel with scratch/nudge
+    Library.js         # Track browser with LOCAL/LIKED/AUDIUS tabs
+    LiveStream.js      # Go Live with WebRTC/chat
+    MidiController.js  # MIDI device mapping and learn mode
+    Playlists.js       # Crates, liked tracks, ratings, play counts
+    Recorder.js        # Mix recording
+    Sampler.js         # 8-pad sample triggering
+    Setlist.js         # Queue and play history
+    Storage.js         # localStorage wrapper
+    Visualizer.js      # Audio visualizer (bars/spectrum)
 ```
 
-## 🚀 Quick Start
+## Tech Stack
 
-### Option A: From Ardour
+- **Audio**: WaveSurfer.js 7 + Web Audio API
+- **UI**: Vanilla HTML/CSS/JS (ES modules), no framework
+- **Fonts**: Bricolage Grotesque (display), DM Sans (body), JetBrains Mono (data)
+- **Streaming**: Audius public API
+- **Hosting**: Any static file server (Netlify, Vercel, GitHub Pages)
 
-1. **Export from Ardour** - See `ardour/EXPORT_GUIDE.md`
-2. **Extract Markers**
-   ```bash
-   python ardour/extract_markers.py your-session.ardour
-   ```
-3. **Deploy**
-   ```bash
-   cd web && python3 -m http.server 8000
-   ```
+## Importing from DAWs
 
-### Option B: From Serato DJ
+### From Ardour
+See `ardour/EXPORT_GUIDE.md` for exporting audio + markers, then use `ardour/extract_markers.py` to convert to JSON.
 
-1. **Record in Serato** - Click REC, set to "Mix", record your set
-2. **Export History** - Click HISTORY, export as CSV
-3. **Convert to Web Format**
-   ```bash
-   python3 serato/convert_serato_history.py session.csv \
-     -o web/data/my-mix.json \
-     --title "My Mix" --artist "DJ Name" --add-intro-outro
-   ```
-4. **Convert Audio**
-   ```bash
-   ffmpeg -i recording.wav -b:a 320k web/data/my-mix.mp3
-   ```
-5. **Deploy**
-   ```bash
-   cd web && python3 -m http.server 8000
-   ```
-
-See `serato/SERATO_INTEGRATION.md` for complete guide.
-
-## 🌐 Deploy to Production
-
-- **Netlify**: `netlify deploy --prod`
-- **Vercel**: `vercel --prod`
-- **GitHub Pages**: Push to `gh-pages` branch
-
-See `docs/DEPLOYMENT.md` for details.
-
-## 🎨 Philosophy
-
-This is not just a music player. It's infrastructure for:
-- **Ownable media**: You control the files and metadata
-- **Composable embeds**: Share specific moments, sections, loops
-- **Social-native audio**: Built for sharing, not just listening
-- **Hackable by design**: Open formats, no vendor lock-in
-
-## 📖 Documentation
-
-### For Ardour Users
-- [Ardour Export Guide](ardour/EXPORT_GUIDE.md)
-- [Quick Start Guide](QUICKSTART.md)
-
-### For Serato DJ Users
-- [Serato Integration Guide](serato/SERATO_INTEGRATION.md)
-- [Recording & History Tutorial](serato/SERATO_INTEGRATION.md#part-1-recording-your-dj-set-in-serato)
-- [Web Player Controls Guide](serato/SERATO_INTEGRATION.md#part-4-understanding-the-web-player-controls)
-
-### General
-- [JSON Schema](docs/SCHEMA.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Extension Ideas](docs/EXTENSIONS.md)
+### From Serato DJ
+See `serato/SERATO_INTEGRATION.md` for converting Serato history CSV to the web player format.
 
 ## Flow Mode — Auto-DJ for Non-DJs
 
@@ -167,15 +205,6 @@ Transition ends → AutoTransition.onComplete fires
                → advances queue, refreshes suggestions
                → cycle repeats (next transition will be B→A)
 ```
-
-## 🛠 Tech Stack
-
-- **DAW**: Ardour (open-source) or Serato DJ Pro/Lite
-- **Audio Format**: WAV/FLAC → MP3/OGG for web
-- **Metadata**: JSON (from Ardour XML or Serato CSV)
-- **Player**: WaveSurfer.js + Web Audio API
-- **Hosting**: Static site (Netlify/Vercel/GitHub Pages)
-- **Live Streaming**: OBS + Virtual Audio Device (optional)
 
 ## License
 

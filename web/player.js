@@ -27,6 +27,7 @@ import { Playlists } from './dj/Playlists.js';
 import { PerfMonitor } from './dj/PerfMonitor.js';
 import { Settings } from './dj/Settings.js';
 import { FlowMode } from './dj/FlowMode.js';
+import { Audius } from './dj/Audius.js';
 
 class DJPlayer {
     constructor() {
@@ -76,14 +77,22 @@ class DJPlayer {
         // Flow Mode — auto-DJ for non-DJs
         this.flowMode = safeInit('FlowMode', () => new FlowMode(this));
 
+        // Audius integration
+        this.audius = safeInit('Audius', () => new Audius());
+        if (this.audius) {
+            this.library.audius = this.audius;
+            this.library.onLoadDirect = (deckId, streamUrl, meta) => this._onLoadDirect(deckId, streamUrl, meta);
+        }
+
         // Wire library queue button to setlist
         if (this.setlist) {
             this.library.onAddToQueue = (track) => this.setlist.addToQueue(track);
         }
 
-        // Wire playlists to library filter
+        // Wire playlists to library filter and liked tracks
         if (this.playlists) {
             this.playlists.onFilterChange = () => this._applyPlaylistFilter();
+            this.library.playlists = this.playlists;
         }
 
         // UI bindings
@@ -185,13 +194,25 @@ class DJPlayer {
 
     _connectDeckAudio(deck) {
         const mediaEl = deck.getMediaElement();
-        if (!mediaEl) return;
+        if (!mediaEl) {
+            console.error(`[AUDIO:PLAYER] Deck ${deck.id}: No media element found! Cannot connect audio.`);
+            return;
+        }
+
+        console.log(`[AUDIO:PLAYER] Connecting Deck ${deck.id} audio...`);
+        console.log(`[AUDIO:PLAYER]   Media element: <${mediaEl.tagName.toLowerCase()}> src="${mediaEl.src?.substring(0, 60)}..." duration=${mediaEl.duration}`);
+        console.log(`[AUDIO:PLAYER]   Already connected: ${this._audioConnected[deck.id]}`);
 
         try {
             this.audioRouter.connectDeckSource(deck.id, mediaEl);
             this._audioConnected[deck.id] = true;
+            console.log(`[AUDIO:PLAYER]   Deck ${deck.id} audio connected successfully`);
         } catch (e) {
-            console.warn(`Deck ${deck.id}: Audio routing note:`, e.message);
+            console.warn(`[AUDIO:PLAYER] Deck ${deck.id}: Audio routing issue:`, e.message);
+            if (e.message.includes('already been created')) {
+                console.log(`[AUDIO:PLAYER]   This is OK — the MediaElementSource was already created for this element. Audio should still work.`);
+                this._audioConnected[deck.id] = true;
+            }
         }
     }
 
@@ -614,6 +635,22 @@ class DJPlayer {
         );
     }
 
+    _onLoadDirect(deckId, streamUrl, meta) {
+        if (!deckId) {
+            deckId = !this.decks.A.isLoaded ? 'A' : (!this.decks.B.isLoaded ? 'B' : 'A');
+        }
+        const deck = this.decks[deckId];
+        if (!deck) return;
+
+        this.audioRouter.resume();
+        deck.loadDirect(streamUrl, meta);
+
+        // Log to setlist
+        if (this.setlist) {
+            this.setlist.logPlay(meta.title || 'Unknown', meta.artist || '');
+        }
+    }
+
     _applyPlaylistFilter() {
         // Re-render library with playlist filter applied
         // The library will check playlists.activePlaylist to filter tracks
@@ -664,5 +701,28 @@ class DJPlayer {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    new DJPlayer();
+    console.log('%c[AURDOUR DJ] Initializing...', 'background:#00d4ff;color:#000;padding:4px 12px;border-radius:4px;font-weight:bold;font-size:14px');
+    const player = new DJPlayer();
+    window._djPlayer = player; // expose for console debugging
+
+    console.log('%c[AURDOUR DJ] Ready!', 'background:#00ff88;color:#000;padding:4px 12px;border-radius:4px;font-weight:bold;font-size:14px');
+    console.log(`[AUDIO:INIT] AudioContext state: ${player.audioRouter.ctx.state}`);
+    console.log(`[AUDIO:INIT] Sample rate: ${player.audioRouter.ctx.sampleRate}Hz`);
+    console.log(`[AUDIO:INIT] Output: ${player.audioRouter.ctx.destination.channelCount}ch → default device`);
+    console.log(`[AUDIO:INIT] Master gain: ${player.audioRouter.masterGain.gain.value}`);
+    console.log(`[AUDIO:INIT] Crossfader curve: ${player.audioRouter.crossfaderCurve}`);
+    console.log('');
+    console.log('%c HOW TO LOAD AUDIO:', 'color:#ffd54f;font-weight:bold;font-size:12px');
+    console.log('  1. Click the LOAD button on Deck A or B');
+    console.log('  2. Or drag & drop an audio file onto a deck');
+    console.log('  3. Or use the library at the bottom (if tracks are in manifest)');
+    console.log('  4. For system audio: click CAPTURE in the System Audio section');
+    console.log('  5. For mic: click CONNECT in the Mic section');
+    console.log('');
+    console.log('%c PIONEER DDJ-SB3 MIDI:', 'color:#e040fb;font-weight:bold;font-size:12px');
+    console.log('  Controller is MIDI-only (no USB audio routing)');
+    console.log('  Audio plays through your Mac default output');
+    console.log('  All knobs/faders/buttons/pads control the software');
+    console.log('');
+    console.log('  Tip: Use window._djPlayer in console to inspect state');
 });
