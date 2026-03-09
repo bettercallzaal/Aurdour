@@ -12,21 +12,29 @@ export class AudioRouter {
         this._sourceNodes = {};
 
         ['A', 'B'].forEach(id => {
+            // DJ-style filter (low-pass / high-pass sweep)
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 22000; // fully open
+            filter.Q.value = 0.707;
+
             this.channels[id] = {
                 eqLow: this._createEQ('lowshelf', 320),
                 eqMid: this._createEQ('peaking', 1000),
                 eqHigh: this._createEQ('highshelf', 3200),
+                filter: filter,
                 channelGain: this.ctx.createGain(),
                 crossfadeGain: this.ctx.createGain(),
                 analyser: this._createAnalyser(),
                 pfl: false, // pre-fader listen
             };
 
-            // Chain: eqLow → eqMid → eqHigh → channelGain → crossfadeGain → analyser
+            // Chain: eqLow → eqMid → eqHigh → filter → channelGain → crossfadeGain → analyser
             const ch = this.channels[id];
             ch.eqLow.connect(ch.eqMid);
             ch.eqMid.connect(ch.eqHigh);
-            ch.eqHigh.connect(ch.channelGain);
+            ch.eqHigh.connect(ch.filter);
+            ch.filter.connect(ch.channelGain);
             ch.channelGain.connect(ch.crossfadeGain);
             ch.crossfadeGain.connect(ch.analyser);
         });
@@ -418,6 +426,32 @@ export class AudioRouter {
 
     setMasterVolume(level) {
         this.masterGain.gain.value = level;
+    }
+
+    // DJ-style filter knob: 0 = full low-pass, 0.5 = bypass, 1 = full high-pass
+    setFilter(deckId, position) {
+        const ch = this.channels[deckId];
+        if (!ch) return;
+        const filter = ch.filter;
+
+        if (position < 0.48) {
+            // Low-pass: sweep 200Hz – 22kHz
+            filter.type = 'lowpass';
+            const normalized = position / 0.48; // 0–1
+            filter.frequency.value = 200 * Math.pow(22000 / 200, normalized);
+            filter.Q.value = 0.707 + (1 - normalized) * 4; // resonance peak near cutoff
+        } else if (position > 0.52) {
+            // High-pass: sweep 20Hz – 8kHz
+            filter.type = 'highpass';
+            const normalized = (position - 0.52) / 0.48; // 0–1
+            filter.frequency.value = 20 * Math.pow(8000 / 20, normalized);
+            filter.Q.value = 0.707 + normalized * 4;
+        } else {
+            // Center dead zone — bypass (fully open low-pass)
+            filter.type = 'lowpass';
+            filter.frequency.value = 22000;
+            filter.Q.value = 0.707;
+        }
     }
 
     getAnalyserData(deckId) {

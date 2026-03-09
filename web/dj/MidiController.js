@@ -77,6 +77,20 @@ const PIONEER_DDJ = {
     CC_JOG_VINYL: 0x22,
     CC_JOG_RING: 0x21,
 
+    // Note numbers — Loop/Performance (channels 0/1)
+    NOTE_LOOP_IN: 0x10,
+    NOTE_LOOP_OUT: 0x11,
+    NOTE_RELOOP: 0x4D,
+    NOTE_LOOP_HALVE: 0x12,
+    NOTE_LOOP_DOUBLE: 0x13,
+    NOTE_AUTO_LOOP: 0x14,   // auto-loop toggle (beat loop)
+    NOTE_KEYLOCK: 0x1A,
+    NOTE_SLIP: 0x40,
+
+    // Note numbers — FX (channels 0/1)
+    NOTE_FX_TOGGLE: 0x47,
+    NOTE_FX_SELECT: 0x4A,
+
     // CC numbers — Global (channel 6)
     CC_CROSSFADER_MSB: 0x1F,
     CC_CROSSFADER_LSB: 0x3F,
@@ -89,9 +103,14 @@ const PIONEER_DDJ = {
     CC_HEADPHONE_VOL_MSB: 0x10,
     CC_HEADPHONE_VOL_LSB: 0x30,
     CC_BROWSE: 0x40,
+    CC_SAMPLER_VOL_MSB: 0x15,
+    CC_SAMPLER_VOL_LSB: 0x35,
 
     // Hot cue pad notes (channels 7/9)
-    PAD_HOTCUE_BASE: 0x00, // 0x00–0x07
+    PAD_HOTCUE_BASE: 0x00,  // 0x00–0x07
+    PAD_ROLL_BASE: 0x10,    // 0x10–0x17 (beat loop roll mode)
+    PAD_SLICER_BASE: 0x20,  // 0x20–0x27 (slicer mode)
+    PAD_SAMPLER_BASE: 0x30, // 0x30–0x37 (sampler mode)
 };
 
 export class MidiController {
@@ -257,6 +276,33 @@ export class MidiController {
                     case P.NOTE_SHIFT:
                         _midiLog('note', `⇧ SHIFT pressed — Deck ${deckId} (ch=${channel})`);
                         this._shift[channel] = true; return;
+                    case P.NOTE_LOOP_IN:
+                        _midiLog('note', `LOOP IN — Deck ${deckId}`);
+                        this._deckAction(deckId, 'loopIn'); return;
+                    case P.NOTE_LOOP_OUT:
+                        _midiLog('note', `LOOP OUT — Deck ${deckId}`);
+                        this._deckAction(deckId, 'loopOut'); return;
+                    case P.NOTE_RELOOP:
+                        _midiLog('note', `RELOOP — Deck ${deckId}`);
+                        this._deckAction(deckId, 'toggleLoop'); return;
+                    case P.NOTE_LOOP_HALVE:
+                        _midiLog('note', `LOOP /2 — Deck ${deckId}`);
+                        this._deckAction(deckId, 'loopHalve'); return;
+                    case P.NOTE_LOOP_DOUBLE:
+                        _midiLog('note', `LOOP x2 — Deck ${deckId}`);
+                        this._deckAction(deckId, 'loopDouble'); return;
+                    case P.NOTE_AUTO_LOOP:
+                        _midiLog('note', `AUTO LOOP — Deck ${deckId}`);
+                        this._deckAction(deckId, 'autoLoop', 4); return;
+                    case P.NOTE_KEYLOCK:
+                        _midiLog('note', `KEY LOCK — Deck ${deckId}`);
+                        this._deckAction(deckId, 'keylock'); return;
+                    case P.NOTE_SLIP:
+                        _midiLog('note', `SLIP MODE — Deck ${deckId}`);
+                        this._deckAction(deckId, 'slip'); return;
+                    case P.NOTE_FX_TOGGLE:
+                        _midiLog('note', `FX TOGGLE — Deck ${deckId}`);
+                        this._toggleFX(deckId); return;
                 }
                 _midiLog('note', `UNHANDLED note on Deck ${deckId}: note=${_hexByte(data1)} vel=${data2}`);
             }
@@ -268,6 +314,21 @@ export class MidiController {
                     const padIdx = data1 - P.PAD_HOTCUE_BASE;
                     _midiLog('note', `🔲 PAD ${padIdx + 1} pressed — Deck ${padDeck} (ch=${channel})`);
                     this._deckAction(padDeck, 'hotcue', padIdx);
+                    return;
+                }
+                // Beat loop roll pads (0x10–0x17)
+                if (data1 >= P.PAD_ROLL_BASE && data1 <= P.PAD_ROLL_BASE + 7) {
+                    const padIdx = data1 - P.PAD_ROLL_BASE;
+                    const beats = [0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8][padIdx];
+                    _midiLog('note', `🔁 ROLL PAD ${padIdx + 1} (${beats} beats) — Deck ${padDeck}`);
+                    this._deckAction(padDeck, 'autoLoop', beats);
+                    return;
+                }
+                // Sampler pads (0x30–0x37)
+                if (data1 >= P.PAD_SAMPLER_BASE && data1 <= P.PAD_SAMPLER_BASE + 7) {
+                    const padIdx = data1 - P.PAD_SAMPLER_BASE;
+                    _midiLog('note', `🎹 SAMPLER PAD ${padIdx + 1} — Deck ${padDeck}`);
+                    this._triggerSampler(padIdx);
                     return;
                 }
                 _midiLog('note', `UNHANDLED pad note: ch=${channel} note=${_hexByte(data1)} vel=${data2}`);
@@ -283,10 +344,12 @@ export class MidiController {
                         _midiLog('note', `📥 LOAD TO DECK B`);
                         this._loadToDeck('B'); return;
                     case P.NOTE_BROWSE_PRESS:
-                        _midiLog('note', `🔍 BROWSE PRESS (encoder push)`);
+                        _midiLog('note', `🔍 BROWSE PRESS (encoder push) — loading selected track`);
+                        this._loadSelectedTrack();
                         return;
                     case P.NOTE_BACK:
-                        _midiLog('note', `⬅ BACK button`);
+                        _midiLog('note', `⬅ BACK button — switching library tab`);
+                        this._libraryBack();
                         return;
                 }
                 _midiLog('note', `UNHANDLED global note: note=${_hexByte(data1)} vel=${data2}`);
@@ -376,11 +439,15 @@ export class MidiController {
             // Jog wheel — outer ring (pitch bend)
             case P.CC_JOG_RING: this._handleJogWheel(deckId, value, false); return;
 
-            // Filter knob
+            // 14-bit Filter knob
             case P.CC_FILTER_MSB:
                 _midiLog('cc', `FILTER MSB — Deck ${deckId}: ${value}`);
-                this._storeMSB(channel, cc, value); return;
-            case P.CC_FILTER_LSB: return;
+                this._storeMSB(channel, cc, value);
+                this._apply14bitFilter(deckId, channel, cc);
+                return;
+            case P.CC_FILTER_LSB:
+                this._apply14bitFilter(deckId, channel, P.CC_FILTER_MSB, value);
+                return;
         }
 
         _midiLog('cc', `UNHANDLED Deck ${deckId} CC: cc=${_hexByte(cc)} val=${value}`);
@@ -429,8 +496,28 @@ export class MidiController {
             case P.CC_HEADPHONE_VOL_MSB:
                 _midiLog('cc', `HEADPHONE VOL MSB: ${value}`);
                 this._storeMSB(P.CH_GLOBAL, cc, value);
+                this._apply14bitCueVolume(value);
                 return;
             case P.CC_HEADPHONE_VOL_LSB:
+                this._apply14bitCueVolume(null, value);
+                return;
+
+            // 14-bit Booth volume
+            case P.CC_BOOTH_VOL_MSB:
+                _midiLog('vol', `BOOTH VOL MSB: ${value}`);
+                this._storeMSB(P.CH_GLOBAL, cc, value);
+                this._apply14bitBooth(value);
+                return;
+            case P.CC_BOOTH_VOL_LSB:
+                this._apply14bitBooth(null, value);
+                return;
+
+            // 14-bit Sampler volume
+            case P.CC_SAMPLER_VOL_MSB:
+                _midiLog('vol', `SAMPLER VOL MSB: ${value}`);
+                this._storeMSB(P.CH_GLOBAL, cc, value);
+                return;
+            case P.CC_SAMPLER_VOL_LSB:
                 return;
 
             // Browse encoder (relative, centered at 64)
@@ -528,6 +615,82 @@ export class MidiController {
         if (slider) slider.value = normalized * 100;
     }
 
+    _apply14bitFilter(deckId, channel, msbCC, lsb) {
+        const normalized = this._get14bit(channel, msbCC, lsb);
+        _midiLog('cc', `FILTER Deck ${deckId}: normalized=${normalized.toFixed(3)}`);
+        const router = this.dj.audioRouter;
+        if (router) router.setFilter(deckId, normalized);
+
+        const knob = document.getElementById(`filter-${deckId.toLowerCase()}`);
+        if (knob) knob.value = normalized * 100;
+    }
+
+    _apply14bitCueVolume(msb, lsb) {
+        const P = PIONEER_DDJ;
+        if (msb != null) this._storeMSB(P.CH_GLOBAL, P.CC_HEADPHONE_VOL_MSB, msb);
+        const normalized = this._get14bit(P.CH_GLOBAL, P.CC_HEADPHONE_VOL_MSB, lsb);
+        _midiLog('vol', `HEADPHONE VOL: normalized=${normalized.toFixed(3)}`);
+        const router = this.dj.audioRouter;
+        if (router) router.setCueVolume(normalized);
+
+        const slider = document.getElementById('cue-vol');
+        if (slider) slider.value = normalized * 100;
+    }
+
+    _apply14bitBooth(msb, lsb) {
+        const P = PIONEER_DDJ;
+        if (msb != null) this._storeMSB(P.CH_GLOBAL, P.CC_BOOTH_VOL_MSB, msb);
+        const normalized = this._get14bit(P.CH_GLOBAL, P.CC_BOOTH_VOL_MSB, lsb);
+        _midiLog('vol', `BOOTH VOL: normalized=${normalized.toFixed(3)}`);
+        const router = this.dj.audioRouter;
+        if (router) router.setBoothVolume(normalized);
+
+        const slider = document.getElementById('booth-vol');
+        if (slider) slider.value = normalized * 100;
+    }
+
+    _loadSelectedTrack() {
+        const library = this.dj.library;
+        if (!library) return;
+
+        if (library.selectedTrack) {
+            // Auto-select idle deck (not playing), prefer A
+            const deckA = this.dj.decks?.A;
+            const deckB = this.dj.decks?.B;
+            let targetDeck = 'A';
+            if (deckA?.isPlaying && !deckB?.isPlaying) targetDeck = 'B';
+            else if (!deckA?.isLoaded) targetDeck = 'A';
+            else if (!deckB?.isLoaded) targetDeck = 'B';
+
+            _midiLog('action', `BROWSE PRESS → loading "${library.selectedTrack?.title || 'track'}" to Deck ${targetDeck}`);
+            library.loadToDeck(library.selectedTrack, targetDeck);
+        } else {
+            _midiLog('info', 'Browse press — no track selected');
+        }
+    }
+
+    _libraryBack() {
+        // Cycle through library tabs: LOCAL → LIKED → AUDIUS
+        const tabs = document.querySelectorAll('.lib-tab');
+        if (!tabs.length) return;
+        const activeIdx = Array.from(tabs).findIndex(t => t.classList.contains('active'));
+        const prevIdx = activeIdx > 0 ? activeIdx - 1 : tabs.length - 1;
+        tabs[prevIdx]?.click();
+    }
+
+    _triggerSampler(padIdx) {
+        const sampler = this.dj.sampler;
+        if (sampler) {
+            sampler.trigger(padIdx);
+            _midiLog('action', `SAMPLER pad ${padIdx + 1} triggered`);
+        } else {
+            // Fallback: click the sampler pad button in the UI
+            const padBtn = document.getElementById(`sampler-pad-${padIdx}`);
+            if (padBtn) padBtn.click();
+            else _midiLog('info', `Sampler not available and no pad button found for pad ${padIdx + 1}`);
+        }
+    }
+
     // ── Deck Actions ────────────────────────────────────────────
 
     _deckAction(deckId, action, param) {
@@ -554,12 +717,41 @@ export class MidiController {
                 _midiLog('action', `HOT CUE ${param + 1} on Deck ${deckId} — cue exists: ${!!deck.hotCues?.[param]}`);
                 deck.triggerHotCue(param);
                 break;
+            case 'loopIn': deck.setLoopIn(); break;
+            case 'loopOut': deck.setLoopOut(); break;
+            case 'toggleLoop': deck.toggleLoop(); break;
+            case 'loopHalve': deck.loopHalve(); break;
+            case 'loopDouble': deck.loopDouble(); break;
+            case 'autoLoop': deck.autoLoop(param || 4); break;
+            case 'keylock':
+                deck.keyLock = !deck.keyLock;
+                _midiLog('action', `KEY LOCK ${deck.keyLock ? 'ON' : 'OFF'} — Deck ${deckId}`);
+                // Update UI toggle if present
+                const klBtn = document.getElementById(`keylock-${deckId.toLowerCase()}`);
+                if (klBtn) klBtn.classList.toggle('active', deck.keyLock);
+                break;
+            case 'slip':
+                deck.slipMode = !deck.slipMode;
+                _midiLog('action', `SLIP MODE ${deck.slipMode ? 'ON' : 'OFF'} — Deck ${deckId}`);
+                const slipBtn = document.getElementById(`slip-${deckId.toLowerCase()}`);
+                if (slipBtn) slipBtn.classList.toggle('active', deck.slipMode);
+                break;
         }
     }
 
     _togglePFL(deckId) {
         const btn = document.getElementById(`pfl-${deckId.toLowerCase()}`);
         if (btn) btn.click();
+    }
+
+    _toggleFX(deckId) {
+        const btn = document.getElementById(`fx-toggle-${deckId.toLowerCase()}`);
+        if (btn) {
+            btn.click();
+            _midiLog('action', `FX toggled via UI button — Deck ${deckId}`);
+        } else {
+            _midiLog('info', `FX toggle button not found for Deck ${deckId}`);
+        }
     }
 
     _loadToDeck(deckId) {

@@ -130,6 +130,66 @@ web/
 - **Streaming**: Audius public API
 - **Hosting**: Any static file server (Netlify, Vercel, GitHub Pages)
 
+## MIDI Controller Support
+
+AURDOUR has built-in support for Pioneer DDJ series controllers (DDJ-SB, DDJ-400, DDJ-1000, and other Serato-compatible models). Any controller with "Pioneer", "DDJ", or "Serato" in its name is auto-detected via the Web MIDI API.
+
+### Supported Controls
+
+| Control | MIDI Message | Action |
+|---------|-------------|--------|
+| Play/Pause | Note 0x0B (ch 0/1) | Toggle playback |
+| Cue | Note 0x0C | Set/return to cue point |
+| Sync | Note 0x58 | Sync BPM to other deck |
+| PFL/Headphone Cue | Note 0x54 | Toggle pre-fader listen |
+| Load Deck A/B | Note 0x46/0x47 (ch 6) | Load selected track |
+| Volume Fader | CC 0x13/0x33 (14-bit) | Per-channel volume |
+| EQ High/Mid/Low | CC 0x07/0x0B/0x0F (14-bit) | 3-band EQ (-24dB to +6dB) |
+| Filter Knob | CC 0x17/0x37 (14-bit) | DJ-style LP/HP sweep with center bypass |
+| Tempo Slider | CC 0x00/0x20 (14-bit) | Pitch/tempo adjust (±8%) |
+| Crossfader | CC 0x1F/0x3F (ch 6, 14-bit) | A/B mix blend |
+| Master Volume | CC 0x0D/0x2D (ch 6, 14-bit) | Master output level |
+| Booth Volume | CC 0x11/0x31 (ch 6, 14-bit) | Booth output level |
+| Headphone Volume | CC 0x10/0x30 (ch 6, 14-bit) | Cue/headphone level |
+| Headphone Mix | CC 0x0E/0x2E (ch 6, 14-bit) | Cue/master balance |
+| Jog Wheel (vinyl) | CC 0x22 | Scratch |
+| Jog Wheel (ring) | CC 0x21 | Pitch bend/nudge |
+| Browse Encoder | CC 0x40 (ch 6) | Scroll library track list |
+| Browse Press | Note 0x41 (ch 6) | Load selected track to idle deck |
+| Back Button | Note 0x42 (ch 6) | Cycle library tabs |
+| Loop In/Out | Note 0x10/0x11 | Set loop points |
+| Reloop | Note 0x4D | Toggle loop on/off |
+| Loop Halve/Double | Note 0x12/0x13 | Resize active loop |
+| Auto Loop | Note 0x14 | Beat loop (4 beats default) |
+| Key Lock | Note 0x1A | Toggle key lock |
+| Slip Mode | Note 0x40 | Toggle slip mode |
+| FX Toggle | Note 0x47 | Toggle FX on/off |
+| Hot Cue Pads 1–8 | Note 0x00–0x07 (ch 7/9) | Trigger/set hot cues |
+| Roll Pads 1–8 | Note 0x10–0x17 (ch 7/9) | Beat loop rolls (1/16 to 8 beats) |
+| Sampler Pads 1–8 | Note 0x30–0x37 (ch 7/9) | Trigger sampler slots |
+
+### Audio Signal Chain
+
+```
+Source → EQ (Low/Mid/High) → DJ Filter (LP/HP sweep) → Channel Gain → Crossfade → Analyser → Master → Output
+```
+
+The DJ-style filter knob sweeps from low-pass (left) through a center bypass dead zone to high-pass (right), with resonance peaks near the cutoff frequency — matching the feel of hardware DJ mixers.
+
+### MIDI Learn
+
+For non-Pioneer controllers, use the **LEARN** button in the MIDI section (Pro Mode) to manually map any MIDI CC or note to DJ actions. Mappings can be exported/imported as JSON.
+
+### Channel Layout
+
+- **Channel 0** — Deck A transport + EQ + filter + volume
+- **Channel 1** — Deck B transport + EQ + filter + volume
+- **Channel 6** — Global controls (crossfader, master, booth, headphone, browse)
+- **Channel 7** — Deck A pads (hot cues, rolls, sampler)
+- **Channel 9** — Deck B pads (hot cues, rolls, sampler)
+
+All faders and knobs use 14-bit MSB/LSB pairs for high-resolution control (16,384 steps).
+
 ## Importing from DAWs
 
 ### From Ardour
