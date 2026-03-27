@@ -35,8 +35,13 @@
                 <button class="btn-toolbar" id="viz-toggle" title="Toggle visualizer (V)">VIZ</button>
                 <button class="btn-toolbar btn-sm" id="viz-mode" title="Visualizer mode">BARS</button>
 
-                <!-- Live -->
+                <!-- Live & Chat -->
                 <button class="btn-toolbar" id="live-toggle" title="Go live">GO LIVE</button>
+                <button class="btn-toolbar" id="stream-chat-toggle" title="Toggle stream chat panel">CHAT</button>
+
+                <!-- Plugins & Suggest -->
+                <button class="btn-toolbar" id="plugins-btn" title="Plugin manager">PLUGINS</button>
+                <button class="btn-toolbar" id="suggest-toggle" title="AI suggestions">SUGGEST</button>
 
                 <!-- Auto Transition -->
                 <button class="btn-toolbar" id="auto-trans-btn" title="Auto crossfade transition">AUTO</button>
@@ -597,6 +602,14 @@
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v12M8 9.5l4-3.5 4 3.5M8 14.5l4 3.5 4-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             AUDIUS
                         </button>
+                        <button class="library-tab" data-tab="soundcloud">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11.56 8.87V17h8.76c1.85 0 2.68-1.4 2.68-2.82 0-1.42-.83-2.82-2.68-2.82-.17 0-.5.03-.67.08C19.48 9.49 17.86 8 15.88 8c-.57 0-1.11.14-1.59.38v.03c-.13-.02-.26-.04-.4-.04-1.3 0-2.33 1.09-2.33 2.5zM1 14h2v3H1zm3-1h2v4H4zm3-1h2v5H7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            SOUNDCLOUD
+                        </button>
+                        <button class="library-tab" data-tab="spotify">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 14.36c-.2.3-.56.38-.86.2-2.36-1.44-5.32-1.76-8.82-.96-.34.08-.66-.14-.74-.46-.08-.34.14-.66.46-.74 3.84-.88 7.12-.5 9.78 1.1.3.18.38.56.18.86zm1.22-2.7c-.24.38-.76.5-1.14.24-2.7-1.66-6.82-2.14-10.02-1.16-.42.12-.86-.12-.98-.54-.12-.42.12-.86.54-.98 3.64-1.1 8.18-.58 11.28 1.32.36.24.48.74.32 1.12zm.12-2.82C14.76 8.82 9.26 8.62 6.26 9.52c-.5.16-1.04-.14-1.18-.64-.14-.5.14-1.04.64-1.18 3.46-1.04 9.2-.84 12.84 1.36.46.28.6.88.32 1.34-.28.46-.88.6-1.34.32z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+                            SPOTIFY
+                        </button>
                     </div>
                     <input type="search" id="library-search" class="library-search" placeholder="Search tracks...">
                 </div>
@@ -934,5 +947,71 @@
         watchDeckHint('b');
     })();
     </script>
+
+    <!-- ===== STREAMING CHAT PANEL ===== -->
+    <div class="stream-panel hidden" id="stream-panel">
+        <div class="stream-panel-header">
+            <span class="stream-panel-title">STREAM CHAT</span>
+            <button class="btn-toolbar btn-sm" id="stream-panel-close">X</button>
+        </div>
+        <div class="stream-connections">
+            <div class="stream-connect-group">
+                <div class="stream-connect-label"><span class="platform-dot twitch-dot"></span>TWITCH <span class="connect-status" id="twitch-status">Offline</span></div>
+                <div class="stream-connect-row">
+                    <input type="text" id="twitch-channel-input" class="stream-input" placeholder="channel name" spellcheck="false">
+                    <button class="btn-stream-connect" id="twitch-connect-btn">JOIN</button>
+                </div>
+            </div>
+            <div class="stream-connect-group">
+                <div class="stream-connect-label"><span class="platform-dot yt-dot"></span>YOUTUBE <span class="connect-status" id="yt-status">Offline</span></div>
+                <div class="stream-connect-row">
+                    <input type="text" id="yt-video-input" class="stream-input" placeholder="video ID" spellcheck="false">
+                    <input type="text" id="yt-api-key-input" class="stream-input" placeholder="API key" spellcheck="false">
+                    <button class="btn-stream-connect" id="yt-connect-btn">JOIN</button>
+                </div>
+            </div>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="stream-requests-section hidden" id="stream-requests-section">
+            <div class="stream-requests-header"><span>SONG REQUESTS</span></div>
+            <div class="chat-requests" id="requests-list"></div>
+        </div>
+    </div>
+
+    <!-- ===== AI SUGGESTIONS PANEL ===== -->
+    <div class="suggest-panel hidden" id="suggest-panel">
+        <div class="suggest-header">SMART SUGGESTIONS</div>
+        <div class="suggest-list" id="suggest-list"></div>
+    </div>
+
+    <!-- ===== PLUGINS PANEL ===== -->
+    <div class="plugins-panel hidden" id="plugins-panel">
+        <div class="plugins-header">PLUGINS</div>
+        <div class="plugins-builtins">
+            <button class="btn-toolbar btn-sm" id="plugin-toggle-autoGain">Auto-Gain</button>
+            <button class="btn-toolbar btn-sm" id="plugin-toggle-trackStats">Track Stats</button>
+            <button class="btn-toolbar btn-sm" id="plugin-toggle-transitionLog">Transition Log</button>
+        </div>
+        <div id="plugins-list"></div>
+        <button class="btn-toolbar btn-sm" id="plugin-load-btn">Load Plugin (.js)</button>
+        <input type="file" id="plugin-load-file" accept=".js" class="hidden">
+        <div id="plugin-panels"></div>
+    </div>
+
+    <!-- ===== CLOUD SYNC ===== -->
+    <div style="display:none">
+        <button id="sync-export-btn">Export</button>
+        <button id="sync-import-btn">Import</button>
+        <input type="file" id="sync-import-file" accept=".json">
+        <button id="sync-qr-btn">QR Sync</button>
+        <div id="sync-qr-container" class="hidden"></div>
+    </div>
+
+    <!-- ===== AUDIO OUTPUT SELECTOR ===== -->
+    <div class="audio-output-selector hidden" id="audio-output-panel">
+        <div class="output-header">AUDIO OUTPUT</div>
+        <select id="audio-output-select" class="toolbar-select" style="width:100%"></select>
+        <button class="btn-toolbar btn-sm" id="audio-output-refresh">Refresh Devices</button>
+    </div>
 </body>
 </html>

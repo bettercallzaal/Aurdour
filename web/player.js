@@ -28,6 +28,13 @@ import { PerfMonitor } from './dj/PerfMonitor.js';
 import { Settings } from './dj/Settings.js';
 import { FlowMode } from './dj/FlowMode.js';
 import { Audius } from './dj/Audius.js';
+import { SoundCloud } from './dj/SoundCloud.js';
+import { Spotify } from './dj/Spotify.js';
+import { TwitchChat } from './dj/TwitchChat.js';
+import { YouTubeLive } from './dj/YouTubeLive.js';
+import { SmartRecommend } from './dj/SmartRecommend.js';
+import { CloudSync } from './dj/CloudSync.js';
+import { PluginManager } from './dj/PluginManager.js';
 
 class DJPlayer {
     constructor() {
@@ -84,6 +91,45 @@ class DJPlayer {
             this.library.onLoadDirect = (deckId, streamUrl, meta) => this._onLoadDirect(deckId, streamUrl, meta);
         }
 
+        // SoundCloud integration
+        this.soundcloud = safeInit('SoundCloud', () => new SoundCloud());
+        if (this.soundcloud) {
+            this.library.soundcloud = this.soundcloud;
+            if (!this.library.onLoadDirect) {
+                this.library.onLoadDirect = (deckId, streamUrl, meta) => this._onLoadDirect(deckId, streamUrl, meta);
+            }
+        }
+
+        // Spotify integration
+        this.spotify = safeInit('Spotify', () => new Spotify());
+        if (this.spotify) {
+            this.library.spotify = this.spotify;
+            if (!this.library.onLoadDirect) {
+                this.library.onLoadDirect = (deckId, streamUrl, meta) => this._onLoadDirect(deckId, streamUrl, meta);
+            }
+        }
+
+        // Twitch & YouTube Live chat
+        this.twitchChat = safeInit('TwitchChat', () => new TwitchChat(
+            (msg) => this._onStreamChatMessage(msg),
+            (req) => this._onStreamSongRequest(req),
+            (cmd) => console.log('Stream command:', cmd)
+        ));
+        this.youtubeLive = safeInit('YouTubeLive', () => new YouTubeLive(
+            (msg) => this._onStreamChatMessage(msg),
+            (req) => this._onStreamSongRequest(req),
+            (cmd) => console.log('Stream command:', cmd)
+        ));
+
+        // AI Recommendations
+        this.smartRecommend = safeInit('SmartRecommend', () => new SmartRecommend(this.harmonic));
+
+        // Cloud Sync
+        this.cloudSync = safeInit('CloudSync', () => new CloudSync(this.storage));
+
+        // Plugin Manager
+        this.pluginManager = safeInit('PluginManager', () => new PluginManager(this));
+
         // Wire library queue button to setlist
         if (this.setlist) {
             this.library.onAddToQueue = (track) => this.setlist.addToQueue(track);
@@ -94,6 +140,15 @@ class DJPlayer {
             this.playlists.onFilterChange = () => this._applyPlaylistFilter();
             this.library.playlists = this.playlists;
         }
+
+        // Stream chat panel toggle
+        this._initStreamPanel();
+
+        // AI Suggestions toggle
+        this._initSuggestPanel();
+
+        // Audio output device selector
+        this._initAudioOutput();
 
         // UI bindings
         this._initTransportButtons();
@@ -608,6 +663,129 @@ class DJPlayer {
         });
     }
 
+    _initStreamPanel() {
+        const panel = document.getElementById('stream-panel');
+        const toggleBtn = document.getElementById('stream-chat-toggle');
+        const closeBtn = document.getElementById('stream-panel-close');
+
+        if (toggleBtn && panel) toggleBtn.addEventListener('click', () => panel.classList.toggle('hidden'));
+        if (closeBtn && panel) closeBtn.addEventListener('click', () => panel.classList.add('hidden'));
+
+        // Twitch connect
+        const twitchBtn = document.getElementById('twitch-connect-btn');
+        if (twitchBtn && this.twitchChat) {
+            twitchBtn.addEventListener('click', () => {
+                if (this.twitchChat.isConnected) {
+                    this.twitchChat.disconnect();
+                    twitchBtn.textContent = 'JOIN';
+                } else {
+                    const channel = document.getElementById('twitch-channel-input')?.value?.trim();
+                    if (channel) this.twitchChat.connectAnonymous(channel);
+                }
+            });
+            this.twitchChat.onConnectionChange = (connected, channel) => {
+                const status = document.getElementById('twitch-status');
+                if (status) { status.textContent = connected ? 'Live: ' + channel : 'Offline'; status.classList.toggle('connected', connected); }
+                twitchBtn.textContent = connected ? 'LEAVE' : 'JOIN';
+            };
+        }
+
+        // YouTube connect
+        const ytBtn = document.getElementById('yt-connect-btn');
+        if (ytBtn && this.youtubeLive) {
+            ytBtn.addEventListener('click', () => {
+                if (this.youtubeLive.isConnected) {
+                    this.youtubeLive.disconnect();
+                    ytBtn.textContent = 'JOIN';
+                } else {
+                    const videoId = document.getElementById('yt-video-input')?.value?.trim();
+                    const apiKey = document.getElementById('yt-api-key-input')?.value?.trim();
+                    if (videoId && apiKey) this.youtubeLive.connect(videoId, apiKey);
+                }
+            });
+            this.youtubeLive.onConnectionChange = (connected) => {
+                const status = document.getElementById('yt-status');
+                if (status) { status.textContent = connected ? 'Live' : 'Offline'; status.classList.toggle('connected', connected); }
+                ytBtn.textContent = connected ? 'LEAVE' : 'JOIN';
+            };
+        }
+    }
+
+    _initSuggestPanel() {
+        const panel = document.getElementById('suggest-panel');
+        const toggleBtn = document.getElementById('suggest-toggle');
+        if (toggleBtn && panel) {
+            toggleBtn.addEventListener('click', () => {
+                panel.classList.toggle('hidden');
+                if (!panel.classList.contains('hidden') && this.smartRecommend) {
+                    // Render suggestions for current playing deck
+                    const deck = this.decks.A.isPlaying ? this.decks.A : (this.decks.B.isPlaying ? this.decks.B : null);
+                    if (deck && deck.metadata) {
+                        const current = {
+                            title: deck.metadata.metadata?.title,
+                            artist: deck.metadata.metadata?.artist,
+                            bpm: deck.metadata.metadata?.bpm,
+                            key: deck.metadata.metadata?.key,
+                            genre: deck.metadata.metadata?.genre,
+                        };
+                        const allTracks = [...this.library.tracks, ...this.library.audiusTracks, ...this.library.soundcloudTracks];
+                        this.smartRecommend.renderSuggestions(current, allTracks, (track, deckId) => {
+                            this.library.loadToDeck(track, deckId);
+                        });
+                    }
+                }
+            });
+        }
+    }
+
+    _initAudioOutput() {
+        const select = document.getElementById('audio-output-select');
+        const refreshBtn = document.getElementById('audio-output-refresh');
+        const panel = document.getElementById('audio-output-panel');
+
+        if (!select) return;
+
+        const populateDevices = async () => {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const outputs = devices.filter(d => d.kind === 'audiooutput');
+                select.innerHTML = '';
+                outputs.forEach(device => {
+                    const opt = document.createElement('option');
+                    opt.value = device.deviceId;
+                    opt.textContent = device.label || `Output ${select.options.length + 1}`;
+                    select.appendChild(opt);
+                });
+                if (panel && outputs.length > 1) panel.classList.remove('hidden');
+            } catch (e) {
+                console.warn('[AudioOutput] Cannot enumerate devices:', e);
+            }
+        };
+
+        select.addEventListener('change', async () => {
+            const deviceId = select.value;
+            try {
+                // Set output device on all audio elements
+                const audioEls = document.querySelectorAll('audio');
+                for (const el of audioEls) {
+                    if (el.setSinkId) await el.setSinkId(deviceId);
+                }
+                // Also set on the audio context destination if supported
+                const ctx = this.audioRouter.getAudioContext();
+                if (ctx.setSinkId) await ctx.setSinkId(deviceId);
+                console.log('[AudioOutput] Switched to device:', select.options[select.selectedIndex]?.textContent);
+            } catch (e) {
+                console.warn('[AudioOutput] Failed to switch device:', e);
+            }
+        });
+
+        if (refreshBtn) refreshBtn.addEventListener('click', populateDevices);
+
+        // Populate on load
+        populateDevices();
+        navigator.mediaDevices?.addEventListener('devicechange', populateDevices);
+    }
+
     _initAudioContextResume() {
         const resumeOnce = () => {
             this.audioRouter.resume();
@@ -697,6 +875,44 @@ class DJPlayer {
             this.decks.B.quantize = true;
             document.getElementById('quantize-toggle')?.classList.add('active');
         }
+    }
+
+    // ===== STREAM CHAT =====
+
+    _onStreamChatMessage(msg) {
+        const list = document.getElementById('chat-messages');
+        if (!list) return;
+
+        const el = document.createElement('div');
+        el.className = 'chat-msg';
+        el.dataset.platform = msg.platform;
+
+        const tag = document.createElement('span');
+        tag.className = 'platform-tag ' + (msg.platform === 'twitch' ? 'twitch-tag' : 'yt-tag');
+        tag.textContent = msg.platform === 'twitch' ? 'TW' : 'YT';
+        el.appendChild(tag);
+
+        const userSpan = document.createElement('span');
+        userSpan.className = 'chat-user';
+        userSpan.style.color = msg.color || 'var(--accent-a)';
+        userSpan.textContent = msg.user;
+        el.appendChild(userSpan);
+
+        el.appendChild(document.createTextNode(' ' + msg.message));
+
+        list.appendChild(el);
+        list.scrollTop = list.scrollHeight;
+        while (list.children.length > 100) list.firstChild.remove();
+    }
+
+    _onStreamSongRequest(request) {
+        const list = document.getElementById('requests-list');
+        if (!list) return;
+        const el = document.createElement('div');
+        el.className = 'request-item';
+        el.textContent = `[${request.platform.toUpperCase()}] ${request.user}: ${request.query}`;
+        list.prepend(el);
+        while (list.children.length > 20) list.lastChild.remove();
     }
 }
 

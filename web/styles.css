@@ -2829,3 +2829,153 @@ body:not(.pro-mode) .bottom-row {
     .jog-wheel { width: 100px; height: 100px; }
     .beat-jump-btns .btn-mini { padding: 6px 10px; }
 }
+
+/* ================================================================
+   STREAMING CHAT PANEL
+   ================================================================ */
+.stream-panel {
+    position: fixed; right: 0; top: 52px; bottom: 0; width: 320px;
+    background: var(--bg-library); border-left: 1px solid var(--border-subtle);
+    z-index: 50; display: flex; flex-direction: column; transition: transform 0.25s ease;
+}
+.stream-panel.hidden { transform: translateX(100%); pointer-events: none; }
+.stream-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-bottom: 1px solid var(--border-subtle);
+    font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+    color: var(--text-dim); letter-spacing: 0.1em;
+}
+.stream-connections { padding: 8px; border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px; }
+.stream-connect-group { display: flex; flex-direction: column; gap: 4px; }
+.stream-connect-label {
+    font-family: var(--font-mono); font-size: 0.55rem; font-weight: 700;
+    color: var(--text-dim); letter-spacing: 0.08em; display: flex; align-items: center; gap: 6px;
+}
+.platform-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.twitch-dot { background: #9146ff; }
+.yt-dot { background: #ff0000; }
+.connect-status { font-size: 0.5rem; font-weight: 400; color: var(--text-dim); margin-left: auto; }
+.connect-status.connected { color: var(--color-play); }
+.stream-connect-row { display: flex; gap: 4px; }
+.stream-input {
+    flex: 1; background: var(--bg-input); border: 1px solid var(--border-subtle);
+    border-radius: 4px; color: var(--text-primary); padding: 4px 8px;
+    font-size: 0.65rem; font-family: var(--font-mono); outline: none;
+}
+.stream-input:focus { border-color: var(--border-active); }
+.btn-stream-connect {
+    background: var(--bg-control); border: 1px solid var(--border-subtle); border-radius: 4px;
+    color: var(--text-secondary); padding: 4px 10px; font-size: 0.6rem;
+    font-family: var(--font-mono); font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn-stream-connect:hover { background: var(--border-active); color: var(--text-primary); }
+.btn-stream-connect.connected { background: rgba(0,255,136,0.15); color: var(--color-play); }
+.stream-panel .chat-messages { flex: 1; overflow-y: auto; padding: 6px; font-size: 0.7rem; }
+.chat-msg { padding: 2px 0; line-height: 1.4; word-break: break-word; }
+.chat-user { font-weight: 600; margin-right: 4px; }
+.platform-tag {
+    font-size: 0.45rem; font-weight: 700; padding: 1px 3px; border-radius: 2px;
+    margin-right: 4px; vertical-align: middle;
+}
+.twitch-tag { background: rgba(145,70,255,0.3); color: #bf94ff; }
+.yt-tag { background: rgba(255,0,0,0.25); color: #ff6b6b; }
+.stream-requests-section { border-top: 1px solid var(--border-subtle); max-height: 150px; overflow-y: auto; padding: 6px; }
+.stream-requests-header {
+    font-family: var(--font-mono); font-size: 0.55rem; font-weight: 700;
+    color: var(--text-dim); letter-spacing: 0.08em; padding: 4px 0;
+}
+.request-item { font-size: 0.65rem; padding: 3px 0; color: var(--text-secondary); }
+
+/* ================================================================
+   AI SUGGESTIONS PANEL
+   ================================================================ */
+.suggest-panel {
+    position: fixed; right: 0; top: 52px; bottom: 0; width: 280px;
+    background: var(--bg-library); border-left: 1px solid var(--border-subtle);
+    z-index: 49; display: flex; flex-direction: column; transition: transform 0.25s ease;
+}
+.suggest-panel.hidden { transform: translateX(100%); pointer-events: none; }
+.suggest-header {
+    padding: 8px 12px; border-bottom: 1px solid var(--border-subtle);
+    font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+    color: var(--text-dim); letter-spacing: 0.1em;
+}
+.suggest-list { flex: 1; overflow-y: auto; padding: 6px; }
+.suggest-item {
+    padding: 8px; margin-bottom: 4px; border-radius: 6px;
+    background: var(--bg-control); border: 1px solid var(--border-subtle); cursor: pointer;
+}
+.suggest-item:hover { border-color: var(--border-active); }
+.suggest-perfect { border-left: 3px solid #00ff88; }
+.suggest-good { border-left: 3px solid #00d4ff; }
+.suggest-creative { border-left: 3px solid #ff6b35; }
+.suggest-info { margin-bottom: 4px; }
+.suggest-title { font-size: 0.7rem; font-weight: 600; color: var(--text-primary); }
+.suggest-artist { font-size: 0.6rem; color: var(--text-dim); }
+.suggest-meta { display: flex; gap: 8px; font-size: 0.55rem; color: var(--text-dim); font-family: var(--font-mono); }
+.suggest-badge { font-size: 0.5rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; }
+.suggest-badge-perfect { background: rgba(0,255,136,0.2); color: #00ff88; }
+.suggest-badge-good { background: rgba(0,212,255,0.2); color: #00d4ff; }
+.suggest-badge-creative { background: rgba(255,107,53,0.2); color: #ff6b35; }
+.suggest-reasons { font-size: 0.5rem; color: var(--text-dim); margin-top: 4px; }
+.suggest-actions { display: flex; gap: 4px; margin-top: 6px; }
+.suggest-empty { text-align: center; color: var(--text-dim); font-size: 0.65rem; padding: 20px; }
+
+/* ================================================================
+   PLUGINS PANEL
+   ================================================================ */
+.plugins-panel {
+    position: fixed; right: 330px; top: 52px; width: 260px; max-height: 400px;
+    background: var(--bg-library); border: 1px solid var(--border-subtle);
+    border-radius: 8px; z-index: 51; padding: 10px; overflow-y: auto;
+}
+.plugins-panel.hidden { display: none; }
+.plugins-header {
+    font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
+    color: var(--text-dim); letter-spacing: 0.1em; margin-bottom: 8px;
+}
+.plugins-builtins { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.plugin-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 6px; border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.6rem;
+}
+.plugin-name { font-weight: 600; color: var(--text-primary); }
+.plugin-version { color: var(--text-dim); font-size: 0.5rem; margin-left: 4px; }
+.plugin-type { color: var(--accent-a); font-size: 0.5rem; margin-left: 4px; text-transform: uppercase; }
+.plugin-status { font-size: 0.5rem; font-weight: 700; }
+.plugin-status.on { color: #00ff88; }
+.plugin-status.off { color: #ff6b6b; }
+.plugin-panel { margin-top: 8px; padding: 8px; background: var(--bg-control); border-radius: 6px; }
+.plugin-panel.hidden { display: none; }
+.plugin-panel-title { font-family: var(--font-mono); font-size: 0.55rem; font-weight: 700; color: var(--text-dim); margin-bottom: 6px; }
+.stat-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 0.6rem; color: var(--text-secondary); }
+.translog-entry { font-size: 0.6rem; padding: 2px 0; color: var(--text-secondary); }
+.translog-time { color: var(--text-dim); font-family: var(--font-mono); }
+.translog-deck { color: var(--accent-a); font-weight: 600; }
+
+/* ================================================================
+   CLOUD SYNC
+   ================================================================ */
+.sync-toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);
+    padding: 10px 20px; border-radius: 8px; font-size: 0.7rem; font-family: var(--font-mono);
+    z-index: 999; transition: transform 0.3s ease; pointer-events: none;
+}
+.sync-toast.show { transform: translateX(-50%) translateY(0); }
+.sync-toast-success { background: rgba(0,255,136,0.2); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+.sync-toast-error { background: rgba(255,107,53,0.2); color: #ff6b6b; border: 1px solid rgba(255,107,53,0.3); }
+.sync-toast-warn { background: rgba(255,221,0,0.2); color: #ffd54f; border: 1px solid rgba(255,221,0,0.3); }
+
+/* ================================================================
+   AUDIO OUTPUT SELECTOR
+   ================================================================ */
+.audio-output-selector { padding: 8px; background: var(--bg-control); border-radius: 6px; margin-top: 8px; }
+.audio-output-selector.hidden { display: none; }
+.output-header { font-family: var(--font-mono); font-size: 0.55rem; font-weight: 700; color: var(--text-dim); margin-bottom: 6px; }
+
+@media (max-width: 768px) {
+    .stream-panel { width: 100%; top: 44px; }
+    .suggest-panel { width: 100%; }
+    .plugins-panel { right: 0; width: 100%; }
+}

@@ -958,3 +958,76 @@ export class MidiController {
         }
     }
 }
+
+// ── Additional MIDI Controller Profiles ──────────────────────────
+
+const MIDI_PROFILES = {
+    'pioneer-ddj': {
+        name: 'Pioneer DDJ',
+        detect: (name) => /pioneer|ddj|serato/i.test(name),
+    },
+    'traktor-s2': {
+        name: 'Traktor Kontrol S2 MK3',
+        detect: (name) => /traktor|kontrol\s*s2/i.test(name),
+        noteMap: {
+            0: { 0x10: 'play', 0x11: 'cue', 0x12: 'sync', 0x0E: 'shift', 0x14: 'hotcue0', 0x15: 'hotcue1', 0x16: 'hotcue2', 0x17: 'hotcue3', 0x18: 'hotcue4', 0x19: 'hotcue5', 0x1A: 'hotcue6', 0x1B: 'hotcue7', 0x0F: 'pfl' },
+            1: { 0x10: 'play', 0x11: 'cue', 0x12: 'sync', 0x0E: 'shift', 0x14: 'hotcue0', 0x15: 'hotcue1', 0x16: 'hotcue2', 0x17: 'hotcue3', 0x18: 'hotcue4', 0x19: 'hotcue5', 0x1A: 'hotcue6', 0x1B: 'hotcue7', 0x0F: 'pfl' },
+        },
+        ccMap: {
+            0: { 0x16: 'eqHigh', 0x17: 'eqMid', 0x18: 'eqLow', 0x19: 'volume', 0x1A: 'tempo', 0x1E: 'jogVinyl', 0x1F: 'jogRing', 0x1B: 'filter' },
+            1: { 0x16: 'eqHigh', 0x17: 'eqMid', 0x18: 'eqLow', 0x19: 'volume', 0x1A: 'tempo', 0x1E: 'jogVinyl', 0x1F: 'jogRing', 0x1B: 'filter' },
+            2: { 0x08: 'crossfader', 0x0D: 'masterVol', 0x0E: 'cueMix', 0x40: 'browse' },
+        },
+        deckChannels: { 0: 'A', 1: 'B' },
+        globalChannel: 2,
+    },
+    'numark-mixtrack': {
+        name: 'Numark Mixtrack Pro FX',
+        detect: (name) => /numark|mixtrack/i.test(name),
+        noteMap: {
+            0: { 0x00: 'play', 0x01: 'cue', 0x02: 'sync', 0x04: 'pfl', 0x08: 'hotcue0', 0x09: 'hotcue1', 0x0A: 'hotcue2', 0x0B: 'hotcue3', 0x10: 'loopIn', 0x11: 'loopOut', 0x12: 'reloop' },
+            1: { 0x00: 'play', 0x01: 'cue', 0x02: 'sync', 0x04: 'pfl', 0x08: 'hotcue0', 0x09: 'hotcue1', 0x0A: 'hotcue2', 0x0B: 'hotcue3', 0x10: 'loopIn', 0x11: 'loopOut', 0x12: 'reloop' },
+        },
+        ccMap: {
+            0: { 0x01: 'eqHigh', 0x02: 'eqMid', 0x03: 'eqLow', 0x04: 'volume', 0x05: 'tempo', 0x06: 'jogVinyl', 0x07: 'jogRing', 0x08: 'filter' },
+            1: { 0x01: 'eqHigh', 0x02: 'eqMid', 0x03: 'eqLow', 0x04: 'volume', 0x05: 'tempo', 0x06: 'jogVinyl', 0x07: 'jogRing', 0x08: 'filter' },
+            2: { 0x03: 'crossfader', 0x04: 'masterVol', 0x40: 'browse' },
+        },
+        deckChannels: { 0: 'A', 1: 'B' },
+        globalChannel: 2,
+    },
+    'hercules-inpulse': {
+        name: 'Hercules DJControl Inpulse 500',
+        detect: (name) => /hercules|inpulse|djcontrol/i.test(name),
+        noteMap: {
+            0: { 0x11: 'play', 0x12: 'cue', 0x13: 'sync', 0x10: 'pfl', 0x20: 'hotcue0', 0x21: 'hotcue1', 0x22: 'hotcue2', 0x23: 'hotcue3', 0x24: 'hotcue4', 0x25: 'hotcue5', 0x26: 'hotcue6', 0x27: 'hotcue7' },
+            1: { 0x11: 'play', 0x12: 'cue', 0x13: 'sync', 0x10: 'pfl', 0x20: 'hotcue0', 0x21: 'hotcue1', 0x22: 'hotcue2', 0x23: 'hotcue3', 0x24: 'hotcue4', 0x25: 'hotcue5', 0x26: 'hotcue6', 0x27: 'hotcue7' },
+        },
+        ccMap: {
+            0: { 0x02: 'eqHigh', 0x03: 'eqMid', 0x04: 'eqLow', 0x00: 'volume', 0x09: 'tempo', 0x30: 'jogVinyl', 0x31: 'jogRing', 0x05: 'filter' },
+            1: { 0x02: 'eqHigh', 0x03: 'eqMid', 0x04: 'eqLow', 0x00: 'volume', 0x09: 'tempo', 0x30: 'jogVinyl', 0x31: 'jogRing', 0x05: 'filter' },
+            2: { 0x08: 'crossfader', 0x10: 'masterVol', 0x40: 'browse' },
+        },
+        deckChannels: { 0: 'A', 1: 'B' },
+        globalChannel: 2,
+    },
+    'roland-dj202': {
+        name: 'Roland DJ-202',
+        detect: (name) => /roland|dj.?202/i.test(name),
+        noteMap: {
+            0: { 0x0B: 'play', 0x0C: 'cue', 0x58: 'sync', 0x54: 'pfl', 0x00: 'hotcue0', 0x01: 'hotcue1', 0x02: 'hotcue2', 0x03: 'hotcue3', 0x04: 'hotcue4', 0x05: 'hotcue5', 0x06: 'hotcue6', 0x07: 'hotcue7' },
+            1: { 0x0B: 'play', 0x0C: 'cue', 0x58: 'sync', 0x54: 'pfl', 0x00: 'hotcue0', 0x01: 'hotcue1', 0x02: 'hotcue2', 0x03: 'hotcue3', 0x04: 'hotcue4', 0x05: 'hotcue5', 0x06: 'hotcue6', 0x07: 'hotcue7' },
+        },
+        ccMap: {
+            0: { 0x07: 'eqHigh', 0x0B: 'eqMid', 0x0F: 'eqLow', 0x13: 'volume', 0x00: 'tempo', 0x22: 'jogVinyl', 0x21: 'jogRing', 0x17: 'filter' },
+            1: { 0x07: 'eqHigh', 0x0B: 'eqMid', 0x0F: 'eqLow', 0x13: 'volume', 0x00: 'tempo', 0x22: 'jogVinyl', 0x21: 'jogRing', 0x17: 'filter' },
+            6: { 0x1F: 'crossfader', 0x0D: 'masterVol', 0x40: 'browse' },
+        },
+        deckChannels: { 0: 'A', 1: 'B' },
+        globalChannel: 6,
+    },
+};
+
+// Make profiles accessible for auto-detection
+MidiController.PROFILES = MIDI_PROFILES;
+}

@@ -19,6 +19,14 @@ export class Library {
         this.audiusTracks = [];
         this._searchDebounce = null;
 
+        // SoundCloud
+        this.soundcloud = null; // set externally
+        this.soundcloudTracks = [];
+
+        // Spotify
+        this.spotify = null; // set externally
+        this.spotifyTracks = [];
+
         if (this.searchInput) {
             this.searchInput.addEventListener('input', () => this._onSearchInput());
         }
@@ -54,6 +62,22 @@ export class Library {
             } else {
                 this._loadAudiusTrending();
             }
+        } else if (this.activeTab === 'soundcloud') {
+            this.searchInput.placeholder = 'Search SoundCloud...';
+            if (query.length >= 2) {
+                this._searchSoundCloud(query);
+            } else {
+                this._loadSoundCloudTrending();
+            }
+        } else if (this.activeTab === 'spotify') {
+            this.searchInput.placeholder = 'Search Spotify...';
+            if (!this.spotify || !this.spotify.isAuthenticated) {
+                this._renderSpotifyLogin();
+            } else if (query.length >= 2) {
+                this._searchSpotify(query);
+            } else {
+                this._renderSpotifyLogin();
+            }
         }
     }
 
@@ -70,6 +94,24 @@ export class Library {
                     this._searchAudius(query);
                 } else if (query.length === 0) {
                     this._loadAudiusTrending();
+                }
+            }, 400);
+        } else if (this.activeTab === 'soundcloud') {
+            clearTimeout(this._searchDebounce);
+            this._searchDebounce = setTimeout(() => {
+                const query = (this.searchInput?.value || '').trim();
+                if (query.length >= 2) {
+                    this._searchSoundCloud(query);
+                } else if (query.length === 0) {
+                    this._loadSoundCloudTrending();
+                }
+            }, 400);
+        } else if (this.activeTab === 'spotify') {
+            clearTimeout(this._searchDebounce);
+            this._searchDebounce = setTimeout(() => {
+                const query = (this.searchInput?.value || '').trim();
+                if (query.length >= 2) {
+                    this._searchSpotify(query);
                 }
             }, 400);
         }
@@ -119,12 +161,27 @@ export class Library {
     _getCurrentList() {
         if (this.activeTab === 'liked') return this.playlists ? this.playlists.getLikedTracks() : [];
         if (this.activeTab === 'audius') return this.audiusTracks;
+        if (this.activeTab === 'soundcloud') return this.soundcloudTracks;
+        if (this.activeTab === 'spotify') return this.spotifyTracks;
         return this.filteredTracks;
     }
 
     loadToDeck(track, deckId) {
         if (track && track.source === 'audius') {
             if (this.onLoadDirect) {
+                this.onLoadDirect(deckId, track.streamUrl, track);
+            }
+        } else if (track && track.source === 'soundcloud') {
+            if (this.onLoadDirect && this.soundcloud) {
+                this.soundcloud.getStreamUrl(track.sourceId || track.id).then(url => {
+                    if (url) {
+                        track.streamUrl = url;
+                        this.onLoadDirect(deckId, url, track);
+                    }
+                }).catch(e => console.error('[Library] SoundCloud stream failed:', e));
+            }
+        } else if (track && track.source === 'spotify') {
+            if (this.onLoadDirect && track.streamUrl) {
                 this.onLoadDirect(deckId, track.streamUrl, track);
             }
         } else if (track && track.dataFile) {
@@ -344,6 +401,176 @@ export class Library {
         td.textContent = msg;
         row.appendChild(td);
         this.tableBody.appendChild(row);
+    }
+
+    // ===== Spotify =====
+
+    _renderSpotifyLogin() {
+        if (!this.tableBody) return;
+        this.tableBody.textContent = '';
+        const row = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.style.textAlign = 'center';
+        td.style.padding = '20px';
+        if (this.spotify && this.spotify.isAuthenticated) {
+            td.style.color = '#1DB954';
+            td.textContent = 'Connected to Spotify. Search for tracks above.';
+        } else {
+            td.innerHTML = '<div style="color:#1DB954;margin-bottom:8px">Connect your Spotify account to search tracks</div>' +
+                '<button class="btn-toolbar" id="spotify-login-btn" style="color:#1DB954;border-color:#1DB954">LOGIN WITH SPOTIFY</button>' +
+                '<div style="color:#555;font-size:0.6rem;margin-top:8px">Uses 30-second previews (free, no premium needed)</div>';
+        }
+        row.appendChild(td);
+        this.tableBody.appendChild(row);
+
+        const loginBtn = document.getElementById('spotify-login-btn');
+        if (loginBtn && this.spotify) {
+            loginBtn.addEventListener('click', () => this.spotify.login());
+        }
+    }
+
+    async _searchSpotify(query) {
+        if (!this.spotify || !this.spotify.isAuthenticated) { this._renderSpotifyLogin(); return; }
+        this._renderLoading('Searching Spotify...');
+        try {
+            this.spotifyTracks = await this.spotify.search(query);
+            this._renderSoundCloud(this.spotifyTracks); // reuse the same render format
+        } catch (e) {
+            console.error('[Library] Spotify search failed:', e);
+            this._renderError('Spotify search failed. Try again.');
+        }
+    }
+
+    // ===== SoundCloud =====
+
+    async _searchSoundCloud(query) {
+        if (!this.soundcloud) return;
+        this._renderLoading('Searching SoundCloud...');
+        try {
+            this.soundcloudTracks = await this.soundcloud.search(query);
+            this._renderSoundCloud(this.soundcloudTracks);
+        } catch (e) {
+            console.error('[Library] SoundCloud search failed:', e);
+            this._renderError('SoundCloud search failed. Try again.');
+        }
+    }
+
+    async _loadSoundCloudTrending() {
+        if (!this.soundcloud) return;
+        this._renderLoading('Loading trending...');
+        try {
+            this.soundcloudTracks = await this.soundcloud.getTrending(30);
+            this._renderSoundCloud(this.soundcloudTracks);
+        } catch (e) {
+            console.error('[Library] SoundCloud trending failed:', e);
+            this._renderError('Could not load SoundCloud trending.');
+        }
+    }
+
+    _renderSoundCloud(tracks) {
+        if (!this.tableBody) return;
+        this.tableBody.textContent = '';
+        this.selectedIndex = -1;
+        this.selectedTrack = null;
+
+        if (tracks.length === 0) {
+            const row = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 6;
+            td.style.textAlign = 'center';
+            td.style.color = '#555577';
+            td.style.padding = '16px';
+            td.textContent = 'No tracks found on SoundCloud';
+            row.appendChild(td);
+            this.tableBody.appendChild(row);
+            return;
+        }
+
+        tracks.forEach(track => {
+            const row = document.createElement('tr');
+
+            const tdTitle = document.createElement('td');
+            tdTitle.className = 'lib-title';
+            if (track.artwork) {
+                const img = document.createElement('img');
+                img.src = track.artwork;
+                img.className = 'audius-artwork';
+                img.alt = '';
+                img.width = 24;
+                img.height = 24;
+                tdTitle.appendChild(img);
+            }
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = track.title;
+            tdTitle.appendChild(titleSpan);
+
+            const tdArtist = document.createElement('td');
+            tdArtist.className = 'lib-artist';
+            tdArtist.textContent = track.artist;
+
+            const tdBpm = document.createElement('td');
+            tdBpm.className = 'lib-bpm';
+            tdBpm.textContent = track.bpm || '-';
+
+            const tdKey = document.createElement('td');
+            tdKey.className = 'lib-key';
+            tdKey.textContent = track.key || '-';
+
+            const tdDuration = document.createElement('td');
+            tdDuration.className = 'lib-duration';
+            tdDuration.textContent = this._formatDuration(track.duration);
+
+            const tdActions = document.createElement('td');
+            tdActions.className = 'lib-actions';
+
+            tdActions.appendChild(this._createHeartBtn(track));
+
+            const btnA = document.createElement('button');
+            btnA.className = 'btn-load btn-load-a';
+            btnA.title = 'Load to Deck A';
+            btnA.textContent = 'A';
+            btnA.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.loadToDeck(track, 'A');
+            });
+
+            const btnB = document.createElement('button');
+            btnB.className = 'btn-load btn-load-b';
+            btnB.title = 'Load to Deck B';
+            btnB.textContent = 'B';
+            btnB.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.loadToDeck(track, 'B');
+            });
+
+            const btnQ = document.createElement('button');
+            btnQ.className = 'btn-load';
+            btnQ.title = 'Add to setlist queue';
+            btnQ.textContent = '+';
+            btnQ.style.color = '#ff5500';
+            btnQ.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onAddToQueue) this.onAddToQueue(track);
+            });
+
+            tdActions.appendChild(btnA);
+            tdActions.appendChild(btnB);
+            tdActions.appendChild(btnQ);
+
+            row.appendChild(tdTitle);
+            row.appendChild(tdArtist);
+            row.appendChild(tdBpm);
+            row.appendChild(tdKey);
+            row.appendChild(tdDuration);
+            row.appendChild(tdActions);
+
+            row.addEventListener('dblclick', () => {
+                this.loadToDeck(track, null);
+            });
+
+            this.tableBody.appendChild(row);
+        });
     }
 
     _renderAudius(tracks) {

@@ -405,18 +405,19 @@ export class Deck {
     _quantizeTime(time) {
         if (!this.quantize || this.beatPositions.length === 0) return time;
 
-        // Find nearest beat
-        let closest = this.beatPositions[0];
-        let minDist = Math.abs(time - closest);
-
-        for (const beat of this.beatPositions) {
-            const dist = Math.abs(time - beat);
-            if (dist < minDist) {
-                minDist = dist;
-                closest = beat;
-            }
+        // Binary search for nearest beat (O(log n) instead of O(n))
+        const beats = this.beatPositions;
+        let lo = 0, hi = beats.length - 1;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (beats[mid] < time) lo = mid + 1;
+            else hi = mid;
         }
-
+        // lo is first beat >= time; check it and predecessor
+        let closest = beats[lo];
+        if (lo > 0 && Math.abs(time - beats[lo - 1]) < Math.abs(time - beats[lo])) {
+            closest = beats[lo - 1];
+        }
         return closest;
     }
 

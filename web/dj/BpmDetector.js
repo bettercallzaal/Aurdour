@@ -8,7 +8,31 @@ export class BpmDetector {
         this._cache = {}; // trackId → { bpm, key }
         this._dbReady = false;
         this._db = null;
+        this._worker = null;
         this._openDB();
+        this._initWorker();
+    }
+
+    _initWorker() {
+        try {
+            this._worker = new Worker('dj/bpm-worker.js');
+        } catch (e) {
+            console.warn('[BpmDetector] Web Worker not available, using main thread fallback');
+            this._worker = null;
+        }
+    }
+
+    _analyzeInWorker(audioBuffer) {
+        return new Promise((resolve, reject) => {
+            if (!this._worker) { reject(new Error('No worker')); return; }
+            const channelData = audioBuffer.getChannelData(0);
+            const copy = new Float32Array(channelData);
+            this._worker.onmessage = (e) => {
+                if (e.data.type === 'result') resolve({ bpm: e.data.bpm, key: e.data.key });
+                else if (e.data.type === 'error') reject(new Error(e.data.message));
+            };
+            this._worker.postMessage({ type: 'analyze', channelData: copy, sampleRate: audioBuffer.sampleRate }, [copy.buffer]);
+        });
     }
 
     async _openDB() {
@@ -64,10 +88,17 @@ export class BpmDetector {
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
 
-            const bpm = this._detectBPM(audioBuffer);
-            const key = this._detectKey(audioBuffer);
+            let result;
+            try {
+                // Try Web Worker first (non-blocking)
+                result = await this._analyzeInWorker(audioBuffer);
+            } catch (_) {
+                // Fallback to main thread
+                const bpm = this._detectBPM(audioBuffer);
+                const key = this._detectKey(audioBuffer);
+                result = { bpm, key };
+            }
 
-            const result = { bpm, key };
             this._cache[trackId] = result;
             await this._saveToDB(trackId, result);
 

@@ -64,6 +64,7 @@ export class Visualizer {
 
     _draw() {
         if (!this.running || !this.ctx) return;
+        if (document.hidden) { requestAnimationFrame(() => this._draw()); return; }
 
         const analyser = this.router.masterAnalyser;
         const bufferLength = analyser.frequencyBinCount;
