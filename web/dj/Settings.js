@@ -1,4 +1,4 @@
-// Settings.js — Settings panel UI for preferences, output routing, crossfader curve
+// Settings.js — Settings panel UI for preferences, output routing, crossfader curve, key shift
 
 export class Settings {
     constructor(djPlayer) {
@@ -7,8 +7,15 @@ export class Settings {
         this._undoStack = [];
         this._redoStack = [];
 
+        // Key shift state per deck
+        this._keyShift = { A: 0, B: 0 };
+
+        // Note names for key display
+        this._noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
         this._initUI();
         this._initOutputSelector();
+        this._initKeyShiftInline();
     }
 
     _initUI() {
@@ -38,15 +45,13 @@ export class Settings {
             });
         }
 
-        // Key shift
+        // Key shift (settings panel sliders, kept for backward compatibility)
         ['a', 'b'].forEach(ch => {
             const keyShift = document.getElementById(`keyshift-${ch}`);
             if (keyShift) {
                 keyShift.addEventListener('input', (e) => {
                     const semitones = parseInt(e.target.value);
-                    this._applyKeyShift(ch.toUpperCase(), semitones);
-                    const display = document.getElementById(`keyshift-${ch}-display`);
-                    if (display) display.textContent = `${semitones >= 0 ? '+' : ''}${semitones}`;
+                    this._setKeyShift(ch.toUpperCase(), semitones);
                 });
             }
         });
@@ -80,6 +85,97 @@ export class Settings {
                 this._renderMidiProfiles();
             }
         });
+    }
+
+    // ===== INLINE KEY SHIFT CONTROLS (on deck) =====
+
+    _initKeyShiftInline() {
+        ['a', 'b'].forEach(ch => {
+            const deckId = ch.toUpperCase();
+            const upBtn = document.getElementById(`keyshift-${ch}-up`);
+            const downBtn = document.getElementById(`keyshift-${ch}-down`);
+
+            if (upBtn) {
+                upBtn.addEventListener('click', () => {
+                    const current = this._keyShift[deckId];
+                    if (current < 6) {
+                        this._setKeyShift(deckId, current + 1);
+                    }
+                });
+            }
+
+            if (downBtn) {
+                downBtn.addEventListener('click', () => {
+                    const current = this._keyShift[deckId];
+                    if (current > -6) {
+                        this._setKeyShift(deckId, current - 1);
+                    }
+                });
+            }
+        });
+    }
+
+    _setKeyShift(deckId, semitones) {
+        semitones = Math.max(-6, Math.min(6, semitones));
+        this._keyShift[deckId] = semitones;
+        const ch = deckId.toLowerCase();
+
+        // Apply the actual audio shift
+        this._applyKeyShift(deckId, semitones);
+
+        // Update inline display
+        const inlineDisplay = document.getElementById(`keyshift-${ch}-inline-display`);
+        if (inlineDisplay) {
+            inlineDisplay.textContent = `${semitones >= 0 ? '+' : ''}${semitones}`;
+            inlineDisplay.style.color = semitones === 0 ? '' : (semitones > 0 ? '#00ff88' : '#ff4444');
+        }
+
+        // Update settings panel slider (if open)
+        const settingsSlider = document.getElementById(`keyshift-${ch}`);
+        if (settingsSlider) settingsSlider.value = semitones;
+
+        // Update settings panel display
+        const settingsDisplay = document.getElementById(`keyshift-${ch}-display`);
+        if (settingsDisplay) settingsDisplay.textContent = `${semitones >= 0 ? '+' : ''}${semitones}`;
+
+        // Calculate and display new key after shift
+        this._updateShiftedKeyDisplay(deckId, semitones);
+    }
+
+    _updateShiftedKeyDisplay(deckId, semitones) {
+        const ch = deckId.toLowerCase();
+        const keyDisplay = document.getElementById(`keyshift-${ch}-key-display`);
+        if (!keyDisplay) return;
+
+        // Get the original detected key from the deck display
+        const originalKeyEl = document.getElementById(`deck-${ch}-key`);
+        if (!originalKeyEl || !originalKeyEl.textContent || originalKeyEl.textContent === '--') {
+            keyDisplay.textContent = '';
+            return;
+        }
+
+        const originalKey = originalKeyEl.textContent.trim();
+        const shiftedKey = this._transposeKey(originalKey, semitones);
+
+        if (semitones === 0) {
+            keyDisplay.textContent = '';
+        } else {
+            keyDisplay.textContent = `> ${shiftedKey}`;
+            keyDisplay.style.color = '#ffcc00';
+        }
+    }
+
+    _transposeKey(keyStr, semitones) {
+        if (!keyStr || semitones === 0) return keyStr;
+
+        const isMinor = keyStr.endsWith('m');
+        const rootStr = isMinor ? keyStr.slice(0, -1) : keyStr;
+
+        const noteIndex = this._noteNames.indexOf(rootStr);
+        if (noteIndex === -1) return keyStr; // can't parse
+
+        const newIndex = ((noteIndex + semitones) % 12 + 12) % 12;
+        return this._noteNames[newIndex] + (isMinor ? 'm' : '');
     }
 
     async _initOutputSelector() {
@@ -133,6 +229,11 @@ export class Settings {
             // true key shift requires DSP. For now, toggle preservesPitch off to shift
             media.preservesPitch = false;
         }
+    }
+
+    // Get the current key shift value for a deck
+    getKeyShift(deckId) {
+        return this._keyShift[deckId] || 0;
     }
 
     _renderMidiProfiles() {

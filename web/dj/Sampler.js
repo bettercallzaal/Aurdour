@@ -1,19 +1,50 @@
 // Sampler.js — Soundboard/sample pad bank
-// 8 pads that can load and trigger short audio clips via AudioBufferSourceNode
+// 4 banks (A/B/C/D) of 8 pads = 32 samples
+// Per-pad: loop mode, pitch control, volume control
 
 export class Sampler {
     constructor(audioRouter) {
         this.router = audioRouter;
         this.ctx = audioRouter.getAudioContext();
-        this.pads = new Array(8).fill(null); // { buffer, name, color }
-        this.activeSources = new Array(8).fill(null);
 
-        // Sampler output chain: gain → master
+        // 4 banks, each with 8 pads
+        this.bankCount = 4;
+        this.padCount = 8;
+        this.banks = {};
+        this.bankLabels = ['A', 'B', 'C', 'D'];
+        this.bankColors = {
+            A: ['#ff0000', '#ff3333', '#ff5555', '#ff7777', '#ff2200', '#ff4400', '#ff6600', '#ff1100'],
+            B: ['#00ccff', '#00aaff', '#0088ff', '#0066ff', '#00ddff', '#0099ff', '#0077ff', '#0055ff'],
+            C: ['#00ff66', '#00ff44', '#00ff88', '#00ffaa', '#00ff55', '#00ff77', '#00ff99', '#00ffbb'],
+            D: ['#ff44ff', '#ff66ff', '#ff88ff', '#ffaaff', '#ff55ff', '#ff77ff', '#ff99ff', '#ffbbff'],
+        };
+
+        this.bankLabels.forEach(bank => {
+            this.banks[bank] = new Array(this.padCount).fill(null).map(() => ({
+                buffer: null,
+                name: '',
+                color: '',
+                loopMode: false, // false = one-shot, true = loop
+                pitch: 0,        // semitones offset (-12 to +12)
+                volume: 1.0,     // 0.0 to 1.0
+            }));
+        });
+
+        this.activeBank = 'A';
+        this.activeSources = new Array(this.padCount).fill(null);
+
+        // Sampler output chain: gain -> master
         this.gain = this.ctx.createGain();
-        this.gain.value = 0.8;
+        this.gain.gain.value = 0.8;
         this.gain.connect(audioRouter.masterGain);
 
+        this._initUI();
+    }
+
+    _initUI() {
         this._initPadListeners();
+        this._initBankSwitcher();
+        this._initPadControls();
     }
 
     _initPadListeners() {
@@ -24,8 +55,11 @@ export class Sampler {
             const index = parseInt(pad.dataset.pad);
 
             // Click to trigger
-            pad.addEventListener('click', () => {
-                if (this.pads[index]) {
+            pad.addEventListener('click', (e) => {
+                // Don't trigger if clicking on controls inside the pad
+                if (e.target.closest('.pad-controls')) return;
+                const bankPad = this.banks[this.activeBank][index];
+                if (bankPad && bankPad.buffer) {
                     this.triggerPad(index);
                 }
             });
@@ -54,6 +88,80 @@ export class Sampler {
         }
     }
 
+    _initBankSwitcher() {
+        const bankBtns = document.querySelectorAll('.sampler-bank-btn');
+        bankBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.switchBank(btn.dataset.bank);
+            });
+        });
+    }
+
+    _initPadControls() {
+        // Loop mode toggles
+        document.querySelectorAll('.pad-loop-toggle').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.pad);
+                const pad = this.banks[this.activeBank][index];
+                if (pad) {
+                    pad.loopMode = !pad.loopMode;
+                    btn.classList.toggle('active', pad.loopMode);
+                    btn.textContent = pad.loopMode ? 'LOOP' : '1-SHOT';
+                }
+            });
+        });
+
+        // Pitch controls
+        document.querySelectorAll('.pad-pitch').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                e.stopPropagation();
+                const index = parseInt(slider.dataset.pad);
+                const pad = this.banks[this.activeBank][index];
+                if (pad) {
+                    pad.pitch = parseInt(e.target.value);
+                    const label = slider.parentElement.querySelector('.pad-pitch-display');
+                    if (label) label.textContent = `${pad.pitch >= 0 ? '+' : ''}${pad.pitch}`;
+                }
+            });
+        });
+
+        // Volume controls
+        document.querySelectorAll('.pad-volume').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                e.stopPropagation();
+                const index = parseInt(slider.dataset.pad);
+                const pad = this.banks[this.activeBank][index];
+                if (pad) {
+                    pad.volume = e.target.value / 100;
+                }
+            });
+        });
+    }
+
+    switchBank(bankLabel) {
+        if (!this.bankLabels.includes(bankLabel)) return;
+
+        // Stop all playing pads before switching
+        this.stopAll();
+
+        this.activeBank = bankLabel;
+
+        // Update bank button UI
+        document.querySelectorAll('.sampler-bank-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.bank === bankLabel);
+        });
+
+        // Update display label
+        const bankDisplay = document.getElementById('sampler-bank-display');
+        if (bankDisplay) bankDisplay.textContent = `BANK ${bankLabel}`;
+
+        // Refresh pad UI for new bank
+        for (let i = 0; i < this.padCount; i++) {
+            this._updatePadUI(i);
+        }
+    }
+
     _promptLoadSample(padIndex) {
         const input = document.createElement('input');
         input.type = 'file';
@@ -71,12 +179,11 @@ export class Sampler {
             const arrayBuffer = await file.arrayBuffer();
             const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
 
-            const padColors = ['#ff0000', '#ff8800', '#ffdd00', '#00ff44', '#00ddff', '#0066ff', '#8800ff', '#ff44aa'];
-            this.pads[padIndex] = {
-                buffer: audioBuffer,
-                name: file.name.replace(/\.[^/.]+$/, ''),
-                color: padColors[padIndex],
-            };
+            const colors = this.bankColors[this.activeBank];
+            const pad = this.banks[this.activeBank][padIndex];
+            pad.buffer = audioBuffer;
+            pad.name = file.name.replace(/\.[^/.]+$/, '');
+            pad.color = colors[padIndex];
 
             this._updatePadUI(padIndex);
         } catch (err) {
@@ -84,28 +191,30 @@ export class Sampler {
         }
     }
 
-    async loadSampleFromURL(padIndex, url, name) {
+    async loadSampleFromURL(padIndex, url, name, bankLabel) {
+        const bank = bankLabel || this.activeBank;
         try {
             const response = await fetch(url);
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
 
-            const padColors = ['#ff0000', '#ff8800', '#ffdd00', '#00ff44', '#00ddff', '#0066ff', '#8800ff', '#ff44aa'];
-            this.pads[padIndex] = {
-                buffer: audioBuffer,
-                name: name || `Sample ${padIndex + 1}`,
-                color: padColors[padIndex],
-            };
+            const colors = this.bankColors[bank];
+            const pad = this.banks[bank][padIndex];
+            pad.buffer = audioBuffer;
+            pad.name = name || `Sample ${padIndex + 1}`;
+            pad.color = colors[padIndex];
 
-            this._updatePadUI(padIndex);
+            if (bank === this.activeBank) {
+                this._updatePadUI(padIndex);
+            }
         } catch (err) {
             console.error(`Failed to load sample from URL for pad ${padIndex}:`, err);
         }
     }
 
     triggerPad(padIndex) {
-        const pad = this.pads[padIndex];
-        if (!pad) return;
+        const pad = this.banks[this.activeBank][padIndex];
+        if (!pad || !pad.buffer) return;
 
         this.router.resume();
 
@@ -118,7 +227,19 @@ export class Sampler {
 
         const source = this.ctx.createBufferSource();
         source.buffer = pad.buffer;
-        source.connect(this.gain);
+
+        // Apply pitch shift via detune (100 cents per semitone)
+        source.detune.value = pad.pitch * 100;
+
+        // Apply loop mode
+        source.loop = pad.loopMode;
+
+        // Per-pad volume via gain node
+        const padGain = this.ctx.createGain();
+        padGain.gain.value = pad.volume;
+
+        source.connect(padGain);
+        padGain.connect(this.gain);
         source.start();
         this.activeSources[padIndex] = source;
 
@@ -126,7 +247,9 @@ export class Sampler {
         this._flashPad(padIndex);
 
         source.onended = () => {
-            this.activeSources[padIndex] = null;
+            if (this.activeSources[padIndex] === source) {
+                this.activeSources[padIndex] = null;
+            }
         };
     }
 
@@ -140,7 +263,7 @@ export class Sampler {
     }
 
     stopAll() {
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < this.padCount; i++) {
             this.stopPad(i);
         }
     }
@@ -152,17 +275,36 @@ export class Sampler {
         const padEl = container.children[padIndex];
         if (!padEl) return;
 
-        const pad = this.pads[padIndex];
-        if (pad) {
+        const pad = this.banks[this.activeBank][padIndex];
+        if (pad && pad.buffer) {
             padEl.classList.add('loaded');
             padEl.style.borderColor = pad.color;
             padEl.style.color = pad.color;
-            padEl.querySelector('.sample-name').textContent = pad.name;
+            const nameEl = padEl.querySelector('.sample-name');
+            if (nameEl) nameEl.textContent = pad.name;
+
+            // Update loop mode button
+            const loopBtn = padEl.querySelector('.pad-loop-toggle');
+            if (loopBtn) {
+                loopBtn.classList.toggle('active', pad.loopMode);
+                loopBtn.textContent = pad.loopMode ? 'LOOP' : '1-SHOT';
+            }
+
+            // Update pitch display
+            const pitchSlider = padEl.querySelector('.pad-pitch');
+            const pitchDisplay = padEl.querySelector('.pad-pitch-display');
+            if (pitchSlider) pitchSlider.value = pad.pitch;
+            if (pitchDisplay) pitchDisplay.textContent = `${pad.pitch >= 0 ? '+' : ''}${pad.pitch}`;
+
+            // Update volume
+            const volSlider = padEl.querySelector('.pad-volume');
+            if (volSlider) volSlider.value = pad.volume * 100;
         } else {
             padEl.classList.remove('loaded');
             padEl.style.borderColor = '';
             padEl.style.color = '';
-            padEl.querySelector('.sample-name').textContent = '';
+            const nameEl = padEl.querySelector('.sample-name');
+            if (nameEl) nameEl.textContent = '';
         }
     }
 

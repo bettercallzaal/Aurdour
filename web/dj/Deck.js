@@ -14,6 +14,7 @@ export class Deck {
         this.onTrackNearEnd = options.onTrackNearEnd || null;
         this.onFinish = options.onFinish || null;
         this._nearEndFired = false;
+        this.nearEndThreshold = options.nearEndThreshold || 30; // configurable seconds before end
 
         // Loop state
         this.loop = { active: false, inPoint: null, outPoint: null, region: null };
@@ -124,11 +125,15 @@ export class Deck {
                 this.slipPosition += 1 / 60 * this.currentRate;
             }
 
-            // Near-end detection for auto-advance
+            // Near-end detection for auto-advance (configurable threshold)
             if (!this._nearEndFired && this.onTrackNearEnd) {
                 const duration = this.wavesurfer.getDuration();
                 const remaining = duration - time;
-                if (duration > 0 && remaining <= 30 && remaining > 0) {
+                // Use configurable threshold; for short tracks, use 25% of duration
+                const threshold = duration > 0 && duration < this.nearEndThreshold * 2
+                    ? Math.max(5, duration * 0.25)
+                    : this.nearEndThreshold;
+                if (duration > 0 && remaining <= threshold && remaining > 0) {
                     this._nearEndFired = true;
                     this.onTrackNearEnd(this);
                 }

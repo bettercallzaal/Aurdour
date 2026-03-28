@@ -1,4 +1,5 @@
 // JogWheel.js — Circular jog wheel for nudging, scratching, and beat jumping
+// Enhanced: fractional beat jumps, beat position indicator
 
 export class JogWheel {
     constructor(decks) {
@@ -25,6 +26,7 @@ export class JogWheel {
         });
 
         this._drawLoop();
+        this._startBeatPositionUpdater();
     }
 
     // MIDI controller jog wheel: scratch (vinyl surface)
@@ -130,7 +132,7 @@ export class JogWheel {
         if (!section) return;
 
         section.querySelectorAll('.beat-jump-btn').forEach(btn => {
-            const beats = parseInt(btn.dataset.beats);
+            const beats = parseFloat(btn.dataset.beats); // parseFloat supports fractional beats
             const dir = btn.dataset.dir === 'fwd' ? 1 : -1;
 
             btn.addEventListener('click', () => {
@@ -144,6 +146,10 @@ export class JogWheel {
                 const dur = deck.getDuration();
                 const newTime = Math.max(0, Math.min(dur, currentTime + jumpTime));
                 if (dur > 0) deck.wavesurfer.seekTo(newTime / dur);
+
+                // Flash the button
+                btn.classList.add('active');
+                setTimeout(() => btn.classList.remove('active'), 150);
             });
         });
     }
@@ -177,6 +183,42 @@ export class JogWheel {
             btn.addEventListener('touchstart', (e) => { e.preventDefault(); startNudge(); }, { passive: false });
             btn.addEventListener('touchend', stopNudge);
         });
+    }
+
+    // ===== BEAT POSITION INDICATOR =====
+
+    _startBeatPositionUpdater() {
+        setInterval(() => {
+            ['a', 'b'].forEach(ch => {
+                const deckId = ch.toUpperCase();
+                const indicator = document.getElementById(`beat-pos-${ch}`);
+                if (!indicator) return;
+
+                const deck = this.decks[deckId];
+                if (!deck || !deck.isLoaded) {
+                    indicator.textContent = '--';
+                    return;
+                }
+
+                const bpm = deck.getBPM();
+                if (!bpm) {
+                    indicator.textContent = '--';
+                    return;
+                }
+
+                const currentTime = deck.getCurrentTime();
+                const beatDuration = 60 / bpm;
+                const currentBeat = currentTime / beatDuration;
+                const bar = Math.floor(currentBeat / 4) + 1;
+                const beatInBar = Math.floor(currentBeat % 4) + 1;
+
+                indicator.textContent = `${bar}.${beatInBar}`;
+
+                // Color the beat position based on beat in bar
+                const colors = ['#ff4444', '#ffcc00', '#ffcc00', '#ffcc00'];
+                indicator.style.color = colors[beatInBar - 1] || '#ffcc00';
+            });
+        }, 50); // Update ~20fps
     }
 
     _drawLoop() {
@@ -224,6 +266,29 @@ export class JogWheel {
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Beat indicator dots around the wheel
+        if (deck?.isLoaded) {
+            const bpm = deck.getBPM();
+            if (bpm && isPlaying) {
+                const currentTime = deck.getCurrentTime();
+                const beatDuration = 60 / bpm;
+                const beatPhase = (currentTime % beatDuration) / beatDuration;
+
+                // Draw 4 beat marker dots around the wheel
+                for (let i = 0; i < 4; i++) {
+                    const angle = (i / 4) * Math.PI * 2 - Math.PI / 2;
+                    const dotX = cx + Math.cos(angle) * (r + 1);
+                    const dotY = cy + Math.sin(angle) * (r + 1);
+                    const isCurrent = Math.abs(beatPhase - i / 4) < 0.15 || Math.abs(beatPhase - i / 4 + 1) < 0.15;
+
+                    ctx.beginPath();
+                    ctx.arc(dotX, dotY, isCurrent ? 3 : 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = isCurrent ? color : dimColor;
+                    ctx.fill();
+                }
+            }
+        }
 
         // Center dot
         ctx.beginPath();

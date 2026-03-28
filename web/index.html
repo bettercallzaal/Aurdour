@@ -2,14 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AURDOUR DJ</title>
-    <meta name="description" content="Professional two-deck DJ platform with mixing, effects, and streaming">
+    <meta name="description" content="Professional two-deck DJ platform with mixing, effects, streaming, and full offline travel mode">
     <meta property="og:title" content="AURDOUR DJ">
     <meta property="og:type" content="music.song">
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#00d4ff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AURDOUR DJ">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#06060c">
+    <meta name="msapplication-navbutton-color" content="#00d4ff">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="screen-orientation" content="landscape">
+
+    <!-- PWA Icon fallbacks for iOS -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='30' fill='%2306060c'/%3E%3Ctext x='90' y='105' font-size='60' text-anchor='middle' fill='%2300d4ff' font-family='sans-serif' font-weight='800'%3EDJ%3C/text%3E%3C/svg%3E">
+
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.webmanifest">
-    <meta name="theme-color" content="#00d4ff">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -30,6 +44,7 @@
                     <option value="ogg">OGG</option>
                     <option value="mp4">M4A</option>
                 </select>
+                <span class="toolbar-text rec-track-count" id="rec-track-count"></span>
 
                 <!-- Visualizer -->
                 <button class="btn-toolbar" id="viz-toggle" title="Toggle visualizer (V)">VIZ</button>
@@ -94,6 +109,18 @@
                 <button class="btn-toolbar btn-flow" id="flow-toggle-btn" title="Flow Mode — Auto-DJ picks tracks and mixes for you">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round" stroke-linecap="round"/></svg>
                     <span class="flow-btn-text">AUTO MIX</span>
+                </button>
+            </div>
+
+            <div class="toolbar-group">
+                <button class="btn-toolbar btn-travel" id="travel-mode-btn" title="Travel Mode — touch-optimized for tablets and phones">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span class="travel-btn-label">TRAVEL</span>
+                    <span class="travel-battery" id="travel-battery" style="display:none"></span>
                 </button>
             </div>
 
@@ -230,7 +257,14 @@
                             <option value="flanger">Flanger</option>
                             <option value="filter">Filter</option>
                             <option value="delay">Delay</option>
+                            <option value="phaser">Phaser</option>
+                            <option value="bitcrusher">Bitcrusher</option>
+                            <option value="distortion">Distortion</option>
+                            <option value="gate">Gate</option>
+                            <option value="pingpong">Ping-Pong</option>
+                            <option value="tapestop">Tape Stop</option>
                         </select>
+                        <button class="btn-mini fx-tapestop-trigger" id="fx-a-tapestop-trigger" style="display:none" title="Trigger tape stop">STOP!</button>
                     </div>
                     <div class="fx-knobs">
                         <div class="fx-knob-group">
@@ -246,6 +280,15 @@
                             <input type="range" class="fx-knob" id="fx-a-wetdry" min="0" max="100" value="0">
                         </div>
                     </div>
+                </div>
+
+                <!-- Key Shift (PRO) -->
+                <div class="key-shift-section pro-only">
+                    <span class="key-shift-label">KEY</span>
+                    <button class="btn-mini key-shift-btn" id="keyshift-a-down" title="Key down 1 semitone">-</button>
+                    <span class="key-shift-display" id="keyshift-a-inline-display">0</span>
+                    <button class="btn-mini key-shift-btn" id="keyshift-a-up" title="Key up 1 semitone">+</button>
+                    <span class="key-shift-key" id="keyshift-a-key-display"></span>
                 </div>
 
                 <!-- Stems Section (PRO) -->
@@ -267,12 +310,23 @@
                         <button class="btn-mini nudge-btn" id="nudge-a-fwd" title="Nudge forward">&gt;</button>
                     </div>
                     <div class="beat-jump-btns pro-only">
+                        <button class="btn-mini beat-jump-btn" data-beats="0.25" data-dir="back">&lt;1/4</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="0.5" data-dir="back">&lt;1/2</button>
                         <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="back">&lt;1</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="2" data-dir="back">&lt;2</button>
                         <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="back">&lt;4</button>
                         <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="back">&lt;8</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="16" data-dir="back">&lt;16</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="32" data-dir="back">&lt;32</button>
+                        <span class="beat-position-indicator" id="beat-pos-a" title="Current beat position">--</span>
+                        <button class="btn-mini beat-jump-btn" data-beats="32" data-dir="fwd">32&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="16" data-dir="fwd">16&gt;</button>
                         <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="fwd">8&gt;</button>
                         <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="fwd">4&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="2" data-dir="fwd">2&gt;</button>
                         <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="fwd">1&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="0.5" data-dir="fwd">1/2&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="0.25" data-dir="fwd">1/4&gt;</button>
                     </div>
                 </div>
             </section>
@@ -450,7 +504,14 @@
                             <option value="flanger">Flanger</option>
                             <option value="filter">Filter</option>
                             <option value="delay">Delay</option>
+                            <option value="phaser">Phaser</option>
+                            <option value="bitcrusher">Bitcrusher</option>
+                            <option value="distortion">Distortion</option>
+                            <option value="gate">Gate</option>
+                            <option value="pingpong">Ping-Pong</option>
+                            <option value="tapestop">Tape Stop</option>
                         </select>
+                        <button class="btn-mini fx-tapestop-trigger" id="fx-b-tapestop-trigger" style="display:none" title="Trigger tape stop">STOP!</button>
                     </div>
                     <div class="fx-knobs">
                         <div class="fx-knob-group">
@@ -466,6 +527,15 @@
                             <input type="range" class="fx-knob" id="fx-b-wetdry" min="0" max="100" value="0">
                         </div>
                     </div>
+                </div>
+
+                <!-- Key Shift (PRO) -->
+                <div class="key-shift-section pro-only">
+                    <span class="key-shift-label">KEY</span>
+                    <button class="btn-mini key-shift-btn" id="keyshift-b-down" title="Key down 1 semitone">-</button>
+                    <span class="key-shift-display" id="keyshift-b-inline-display">0</span>
+                    <button class="btn-mini key-shift-btn" id="keyshift-b-up" title="Key up 1 semitone">+</button>
+                    <span class="key-shift-key" id="keyshift-b-key-display"></span>
                 </div>
 
                 <!-- Stems Section (PRO) -->
@@ -487,12 +557,23 @@
                         <button class="btn-mini nudge-btn" id="nudge-b-fwd" title="Nudge forward">&gt;</button>
                     </div>
                     <div class="beat-jump-btns pro-only">
+                        <button class="btn-mini beat-jump-btn" data-beats="0.25" data-dir="back">&lt;1/4</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="0.5" data-dir="back">&lt;1/2</button>
                         <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="back">&lt;1</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="2" data-dir="back">&lt;2</button>
                         <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="back">&lt;4</button>
                         <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="back">&lt;8</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="16" data-dir="back">&lt;16</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="32" data-dir="back">&lt;32</button>
+                        <span class="beat-position-indicator" id="beat-pos-b" title="Current beat position">--</span>
+                        <button class="btn-mini beat-jump-btn" data-beats="32" data-dir="fwd">32&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="16" data-dir="fwd">16&gt;</button>
                         <button class="btn-mini beat-jump-btn" data-beats="8" data-dir="fwd">8&gt;</button>
                         <button class="btn-mini beat-jump-btn" data-beats="4" data-dir="fwd">4&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="2" data-dir="fwd">2&gt;</button>
                         <button class="btn-mini beat-jump-btn" data-beats="1" data-dir="fwd">1&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="0.5" data-dir="fwd">1/2&gt;</button>
+                        <button class="btn-mini beat-jump-btn" data-beats="0.25" data-dir="fwd">1/4&gt;</button>
                     </div>
                 </div>
             </section>
@@ -558,22 +639,99 @@
                         <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
                     </svg>
                     <span class="aux-title">SAMPLER</span>
+                    <span class="sampler-bank-label" id="sampler-bank-display">BANK A</span>
+                    <div class="sampler-bank-btns">
+                        <button class="btn-mini sampler-bank-btn active" data-bank="A" style="color:#ff4444;border-color:#ff4444">A</button>
+                        <button class="btn-mini sampler-bank-btn" data-bank="B" style="color:#44aaff;border-color:#44aaff">B</button>
+                        <button class="btn-mini sampler-bank-btn" data-bank="C" style="color:#44ff88;border-color:#44ff88">C</button>
+                        <button class="btn-mini sampler-bank-btn" data-bank="D" style="color:#ff88ff;border-color:#ff88ff">D</button>
+                    </div>
                     <div class="sampler-vol">
                         <label>VOL</label>
                         <input type="range" id="sampler-volume" min="0" max="100" value="80" class="aux-slider-sm">
                     </div>
                 </div>
                 <div class="sampler-pads" id="sampler-pads">
-                    <div class="sample-pad" data-pad="0"><span class="sample-num">1</span><span class="sample-name"></span></div>
-                    <div class="sample-pad" data-pad="1"><span class="sample-num">2</span><span class="sample-name"></span></div>
-                    <div class="sample-pad" data-pad="2"><span class="sample-num">3</span><span class="sample-name"></span></div>
-                    <div class="sample-pad" data-pad="3"><span class="sample-num">4</span><span class="sample-name"></span></div>
-                    <div class="sample-pad" data-pad="4"><span class="sample-num">5</span><span class="sample-name"></span></div>
-                    <div class="sample-pad" data-pad="5"><span class="sample-num">6</span><span class="sample-name"></span></div>
-                    <div class="sample-pad" data-pad="6"><span class="sample-num">7</span><span class="sample-name"></span></div>
-                    <div class="sample-pad" data-pad="7"><span class="sample-num">8</span><span class="sample-name"></span></div>
+                    <div class="sample-pad" data-pad="0">
+                        <span class="sample-num">1</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="0">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="0" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="0" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
+                    <div class="sample-pad" data-pad="1">
+                        <span class="sample-num">2</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="1">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="1" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="1" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
+                    <div class="sample-pad" data-pad="2">
+                        <span class="sample-num">3</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="2">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="2" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="2" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
+                    <div class="sample-pad" data-pad="3">
+                        <span class="sample-num">4</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="3">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="3" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="3" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
+                    <div class="sample-pad" data-pad="4">
+                        <span class="sample-num">5</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="4">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="4" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="4" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
+                    <div class="sample-pad" data-pad="5">
+                        <span class="sample-num">6</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="5">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="5" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="5" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
+                    <div class="sample-pad" data-pad="6">
+                        <span class="sample-num">7</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="6">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="6" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="6" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
+                    <div class="sample-pad" data-pad="7">
+                        <span class="sample-num">8</span><span class="sample-name"></span>
+                        <div class="pad-controls">
+                            <button class="btn-micro pad-loop-toggle" data-pad="7">1-SHOT</button>
+                            <div class="pad-pitch-row"><input type="range" class="pad-pitch" data-pad="7" min="-12" max="12" value="0" step="1"><span class="pad-pitch-display">0</span></div>
+                            <div class="pad-vol-row"><input type="range" class="pad-volume" data-pad="7" min="0" max="100" value="100"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="sampler-hint">Click to trigger / Right-click to load sample</div>
+            </section>
+
+            <!-- RECORDING PANEL -->
+            <section class="aux-section rec-section hidden" id="rec-panel">
+                <div class="aux-header">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/>
+                    </svg>
+                    <span class="aux-title">RECORDING</span>
+                    <button class="btn-mini" id="rec-split-toggle" title="Split recording at transitions">SPLIT</button>
+                    <button class="btn-mini" id="rec-cue-export" title="Export cue sheet">CUE</button>
+                </div>
+                <canvas id="rec-waveform" class="rec-waveform" width="400" height="40"></canvas>
+                <div class="rec-cue-list" id="rec-cue-list"></div>
             </section>
 
         </div>
@@ -653,6 +811,62 @@
         <!-- ===== FLOW MODE PANEL (overlay) ===== -->
         <div class="flow-panel hidden" id="flow-panel"></div>
 
+        <!-- ===== TRAVEL MODE INFO BAR ===== -->
+        <div class="travel-info-bar" id="travel-info-bar">
+            <div class="travel-deck-info travel-deck-a-info">
+                <span class="travel-deck-label">A</span>
+                <div class="travel-track-info">
+                    <span class="travel-track-title" id="travel-a-title">--</span>
+                    <div class="travel-track-meta">
+                        <span class="travel-bpm" id="travel-a-bpm">--- BPM</span>
+                        <span class="travel-key" id="travel-a-key">--</span>
+                    </div>
+                </div>
+                <button class="btn-travel-play" id="travel-play-a" title="Play/Pause Deck A">
+                    <svg class="icon-play" width="28" height="28" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg class="icon-pause hidden" width="28" height="28" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+                </button>
+            </div>
+
+            <div class="travel-center-controls">
+                <button class="btn-travel-automix" id="travel-automix-btn" title="One-tap Auto Mix">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round" stroke-linecap="round"/></svg>
+                    AUTO MIX
+                </button>
+                <div class="travel-xfader-wrap">
+                    <span class="travel-xf-label">A</span>
+                    <input type="range" id="travel-crossfader" min="0" max="100" value="50" class="travel-crossfader">
+                    <span class="travel-xf-label">B</span>
+                </div>
+            </div>
+
+            <div class="travel-deck-info travel-deck-b-info">
+                <button class="btn-travel-play" id="travel-play-b" title="Play/Pause Deck B">
+                    <svg class="icon-play" width="28" height="28" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg class="icon-pause hidden" width="28" height="28" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+                </button>
+                <div class="travel-track-info">
+                    <span class="travel-track-title" id="travel-b-title">--</span>
+                    <div class="travel-track-meta">
+                        <span class="travel-bpm" id="travel-b-bpm">--- BPM</span>
+                        <span class="travel-key" id="travel-b-key">--</span>
+                    </div>
+                </div>
+                <span class="travel-deck-label travel-deck-label-b">B</span>
+            </div>
+        </div>
+
+        <!-- ===== TRAVEL OFFLINE TRACKS ===== -->
+        <div class="travel-offline-section hidden" id="travel-offline-section">
+            <div class="travel-offline-header">
+                <span>OFFLINE TRACKS</span>
+                <button class="btn-mini" id="travel-offline-close">X</button>
+            </div>
+            <div class="travel-offline-list" id="travel-offline-list">
+                <div class="travel-offline-empty">No tracks saved offline yet.</div>
+            </div>
+        </div>
+
         <!-- ===== SETTINGS PANEL (overlay) ===== -->
         <div class="settings-panel hidden" id="settings-panel">
             <div class="settings-header">
@@ -722,7 +936,53 @@
     <script type="module" src="player.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
+            navigator.serviceWorker.register('/sw.js').then((reg) => {
+                // Check for updates periodically
+                setInterval(() => reg.update(), 60 * 60 * 1000); // hourly
+
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // New version available — show update banner
+                            const banner = document.createElement('div');
+                            banner.className = 'sw-update-banner';
+                            banner.innerHTML = '<span>New version available</span><button id="sw-update-btn">UPDATE</button><button id="sw-dismiss-btn">LATER</button>';
+                            document.body.appendChild(banner);
+                            requestAnimationFrame(() => banner.classList.add('show'));
+
+                            document.getElementById('sw-update-btn')?.addEventListener('click', () => {
+                                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                banner.remove();
+                            });
+                            document.getElementById('sw-dismiss-btn')?.addEventListener('click', () => {
+                                banner.classList.remove('show');
+                                setTimeout(() => banner.remove(), 400);
+                            });
+                        }
+                    });
+                });
+
+                // Listen for SW messages
+                navigator.serviceWorker.addEventListener('message', (e) => {
+                    if (e.data.type === 'SW_UPDATED') {
+                        window.location.reload();
+                    }
+                });
+            }).catch(() => {});
+
+            // Handle URL shortcuts
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('mode') === 'flow') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    setTimeout(() => document.getElementById('flow-toggle-btn')?.click(), 1500);
+                });
+            }
+            if (params.get('action') === 'record') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    setTimeout(() => document.getElementById('rec-btn')?.click(), 2000);
+                });
+            }
         }
     </script>
 

@@ -35,6 +35,7 @@ import { YouTubeLive } from './dj/YouTubeLive.js';
 import { SmartRecommend } from './dj/SmartRecommend.js';
 import { CloudSync } from './dj/CloudSync.js';
 import { PluginManager } from './dj/PluginManager.js';
+import { TravelMode } from './dj/TravelMode.js';
 
 class DJPlayer {
     constructor() {
@@ -130,6 +131,9 @@ class DJPlayer {
         // Plugin Manager
         this.pluginManager = safeInit('PluginManager', () => new PluginManager(this));
 
+        // Travel Mode — touch-optimized mobile/tablet DJ mode
+        this.travelMode = safeInit('TravelMode', () => new TravelMode(this));
+
         // Wire library queue button to setlist
         if (this.setlist) {
             this.library.onAddToQueue = (track) => this.setlist.addToQueue(track);
@@ -162,6 +166,7 @@ class DJPlayer {
         this._initGlobalToggles();
         this._initKeyboardShortcuts();
         this._initAudioContextResume();
+        this._initTravelControls();
         this._loadSettings();
 
         // Load library first — this is the most important thing to show
@@ -171,6 +176,9 @@ class DJPlayer {
 
         // Crash recovery
         this._initCrashRecovery();
+
+        // Tape stop effect listener
+        this._initTapeStopListener();
     }
 
     _initDecks() {
@@ -198,6 +206,10 @@ class DJPlayer {
 
         const onTimeUpdate = (deck, time) => {
             this._updateTimeDisplay(deck, time);
+            // Feed time updates to FlowMode for smart near-end detection
+            if (this.flowMode?.enabled) {
+                this.flowMode.onTimeUpdate(deck);
+            }
         };
 
         const onTrackNearEnd = (deck) => {
@@ -294,6 +306,9 @@ class DJPlayer {
         }
 
         this.broadcast?.updatePlayState(deck.id, deck.isPlaying, currentTime);
+
+        // Update travel mode display
+        this._updateTravelDisplay(deck);
     }
 
     _updateHarmonicDisplay() {
@@ -796,6 +811,67 @@ class DJPlayer {
         document.addEventListener('keydown', resumeOnce);
     }
 
+    _initTravelControls() {
+        // Travel mode play buttons
+        document.getElementById('travel-play-a')?.addEventListener('click', () => {
+            this.audioRouter.resume();
+            this.decks.A.playPause();
+        });
+        document.getElementById('travel-play-b')?.addEventListener('click', () => {
+            this.audioRouter.resume();
+            this.decks.B.playPause();
+        });
+
+        // Travel crossfader — synced with main crossfader
+        const travelCF = document.getElementById('travel-crossfader');
+        const mainCF = document.getElementById('crossfader');
+        if (travelCF && mainCF) {
+            travelCF.addEventListener('input', (e) => {
+                mainCF.value = e.target.value;
+                mainCF.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            // Sync main -> travel
+            mainCF.addEventListener('input', () => {
+                travelCF.value = mainCF.value;
+            });
+        }
+
+        // Travel auto-mix button
+        document.getElementById('travel-automix-btn')?.addEventListener('click', () => {
+            this.audioRouter.resume();
+            if (this.flowMode) this.flowMode.toggle();
+        });
+
+        // Travel offline section
+        document.getElementById('travel-offline-close')?.addEventListener('click', () => {
+            document.getElementById('travel-offline-section')?.classList.add('hidden');
+        });
+    }
+
+    _updateTravelDisplay(deck) {
+        const id = deck.id.toLowerCase();
+        const meta = deck.metadata?.metadata || {};
+
+        const titleEl = document.getElementById(`travel-${id}-title`);
+        const bpmEl = document.getElementById(`travel-${id}-bpm`);
+        const keyEl = document.getElementById(`travel-${id}-key`);
+
+        if (titleEl) titleEl.textContent = meta.title || deck.metadata?.title || '--';
+        if (bpmEl) bpmEl.textContent = meta.bpm ? `${meta.bpm} BPM` : '--- BPM';
+        if (keyEl) keyEl.textContent = meta.key || '--';
+
+        // Update play button state
+        const playBtn = document.getElementById(`travel-play-${id}`);
+        if (playBtn) {
+            const playIcon = playBtn.querySelector('.icon-play');
+            const pauseIcon = playBtn.querySelector('.icon-pause');
+            if (playIcon && pauseIcon) {
+                playIcon.classList.toggle('hidden', deck.isPlaying);
+                pauseIcon.classList.toggle('hidden', !deck.isPlaying);
+            }
+        }
+    }
+
     _onLoadTrack(deckId, dataFile) {
         if (!deckId) {
             deckId = !this.decks.A.isLoaded ? 'A' : (!this.decks.B.isLoaded ? 'B' : 'A');
@@ -806,11 +882,15 @@ class DJPlayer {
         this.audioRouter.resume();
         deck.loadTrack(dataFile);
 
+        const trackName = dataFile.split('/').pop().replace('.json', '');
+
         // Log to setlist
-        this.setlist.logPlay(
-            dataFile.split('/').pop().replace('.json', ''),
-            ''
-        );
+        this.setlist.logPlay(trackName, '');
+
+        // Log to recorder cue sheet
+        if (this.recorder) {
+            this.recorder.logTrackChange(deckId, trackName, '');
+        }
     }
 
     _onLoadDirect(deckId, streamUrl, meta) {
@@ -826,6 +906,11 @@ class DJPlayer {
         // Log to setlist
         if (this.setlist) {
             this.setlist.logPlay(meta.title || 'Unknown', meta.artist || '');
+        }
+
+        // Log to recorder cue sheet
+        if (this.recorder) {
+            this.recorder.logTrackChange(deckId, meta.title || 'Unknown', meta.artist || '');
         }
     }
 
@@ -875,6 +960,66 @@ class DJPlayer {
             this.decks.B.quantize = true;
             document.getElementById('quantize-toggle')?.classList.add('active');
         }
+    }
+
+    // ===== TAPE STOP EFFECT =====
+
+    _initTapeStopListener() {
+        document.addEventListener('tapestop', (e) => {
+            const { deckId, duration, action } = e.detail;
+            const deck = this.decks[deckId];
+            if (!deck || !deck.isLoaded || !deck.wavesurfer) return;
+
+            if (action === 'stop') {
+                // Gradually slow down playback to simulate tape stopping
+                const startRate = deck.currentRate || 1;
+                const steps = 30;
+                const interval = (duration * 1000) / steps;
+                let step = 0;
+
+                const slowDown = setInterval(() => {
+                    step++;
+                    const progress = step / steps;
+                    // Ease-in curve for natural tape stop feel
+                    const rate = startRate * (1 - progress * progress);
+                    try {
+                        deck.wavesurfer.setPlaybackRate(Math.max(0.01, rate));
+                    } catch (err) { /* ignore */ }
+
+                    if (step >= steps) {
+                        clearInterval(slowDown);
+                        try {
+                            deck.wavesurfer.pause();
+                        } catch (err) { /* ignore */ }
+                    }
+                }, interval);
+            } else if (action === 'resume') {
+                // Spin back up
+                const targetRate = deck.currentRate || 1;
+                try {
+                    deck.wavesurfer.play();
+                } catch (err) { /* ignore */ }
+                const steps = 20;
+                const interval = (duration * 1000) / steps;
+                let step = 0;
+
+                const speedUp = setInterval(() => {
+                    step++;
+                    const progress = step / steps;
+                    const rate = targetRate * progress;
+                    try {
+                        deck.wavesurfer.setPlaybackRate(Math.max(0.01, rate));
+                    } catch (err) { /* ignore */ }
+
+                    if (step >= steps) {
+                        clearInterval(speedUp);
+                        try {
+                            deck.wavesurfer.setPlaybackRate(targetRate);
+                        } catch (err) { /* ignore */ }
+                    }
+                }, interval);
+            }
+        });
     }
 
     // ===== STREAM CHAT =====
