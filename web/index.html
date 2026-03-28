@@ -934,7 +934,36 @@
         }
     </script>
     <script type="module" src="player.js"></script>
+    <!-- Fallback: if module fails, at least make tab clicks work -->
     <script>
+    window.addEventListener('DOMContentLoaded', function() {
+        // Wait for module to set up — if it hasn't after 3s, wire tabs manually
+        setTimeout(function() {
+            var body = document.getElementById('library-body');
+            if (body && body.textContent.indexOf('Loading library') !== -1) {
+                console.warn('[FALLBACK] Module may not have loaded. Wiring tabs manually.');
+                var tabs = document.querySelectorAll('.library-tab');
+                tabs.forEach(function(tab) {
+                    tab.style.pointerEvents = 'auto';
+                    tab.style.cursor = 'pointer';
+                });
+                // Show a message
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#ff6b6b;padding:20px">App is loading... If this persists, try clearing cache (Ctrl+Shift+R) or open DevTools (F12) to check for errors.</td></tr>';
+            }
+        }, 3000);
+    });
+    </script>
+    <script>
+        // Add ?reset to URL to force-unregister service worker and clear caches
+        if (window.location.search.includes('reset')) {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                    regs.forEach(r => r.unregister());
+                    caches.keys().then(k => k.forEach(n => caches.delete(n)));
+                    window.location.href = window.location.pathname;
+                });
+            }
+        }
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').then((reg) => {
                 // Check for updates periodically

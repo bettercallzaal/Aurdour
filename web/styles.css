@@ -1358,6 +1358,8 @@ body:not(.pro-mode) .bottom-row {
     background: var(--bg-library);
     display: flex;
     flex-direction: column;
+    position: relative;
+    z-index: 2;
 }
 
 .library-header {
@@ -1495,6 +1497,9 @@ body:not(.pro-mode) .bottom-row {
     display: flex;
     align-items: center;
     gap: 6px;
+    pointer-events: auto;
+    position: relative;
+    z-index: 5;
 }
 
 .library-tab:hover {

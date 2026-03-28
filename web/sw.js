@@ -136,14 +136,20 @@ async function removeCachedAudio(trackId) {
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then(async (cache) => {
-            // Cache app shell first (critical)
-            await cache.addAll(APP_SHELL);
+            // Cache app shell — best-effort per file (one 404 shouldn't block everything)
+            for (const url of APP_SHELL) {
+                try {
+                    await cache.add(url);
+                } catch (e) {
+                    console.warn('[SW] Failed to cache:', url, e.message);
+                }
+            }
             // Then cache CDN assets (best-effort)
             for (const url of CDN_ASSETS) {
                 try {
                     await cache.add(url);
                 } catch (e) {
-                    console.warn('[SW] Failed to cache CDN asset:', url, e);
+                    console.warn('[SW] Failed to cache CDN asset:', url, e.message);
                 }
             }
         })
