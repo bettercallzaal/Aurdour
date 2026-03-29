@@ -191,6 +191,9 @@ self.addEventListener('fetch', (event) => {
     // Skip non-GET requests
     if (event.request.method !== 'GET') return;
 
+    // Skip chrome-extension and other non-http(s) schemes
+    if (!url.protocol.startsWith('http')) return;
+
     // Audio files from data folder — network first, fallback to IndexedDB
     if (url.pathname.startsWith('/data/') && (
         url.pathname.endsWith('.mp3') ||

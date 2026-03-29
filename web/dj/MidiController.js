@@ -1030,4 +1030,3 @@ const MIDI_PROFILES = {
 
 // Make profiles accessible for auto-detection
 MidiController.PROFILES = MIDI_PROFILES;
-}
