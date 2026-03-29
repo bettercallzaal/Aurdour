@@ -309,9 +309,11 @@ export class TravelMode {
                     // Map rotation to seek — positive = forward
                     const deckId = canvas.id.includes('-a') ? 'A' : 'B';
                     const deck = this.dj.decks[deckId];
-                    if (deck) {
+                    if (deck && deck.isLoaded) {
                         const seekAmount = delta * 0.5; // seconds per radian
-                        deck.seek(deck.getCurrentTime() + seekAmount);
+                        const newTime = Math.max(0, Math.min(deck.getDuration(), deck.getCurrentTime() + seekAmount));
+                        const dur = deck.getDuration();
+                        if (dur > 0) deck.wavesurfer.seekTo(newTime / dur);
                     }
                 }
                 lastAngle = angle;

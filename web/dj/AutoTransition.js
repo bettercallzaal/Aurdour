@@ -259,15 +259,15 @@ export class AutoTransition {
         // Access FX module if available through the router's parent player
         const djPlayer = this._getDJPlayer();
         if (djPlayer && djPlayer.fx) {
-            const fxSlot = djPlayer.fx.slots?.[sourceDeckId === 'A' ? 0 : 1];
-            if (fxSlot) {
+            const fxDeck = djPlayer.fx.decks?.[sourceDeckId];
+            if (fxDeck) {
                 // Ramp up the wet/dry mix
                 const wetAmount = Math.min(1, progress * 1.5);
-                fxSlot.wet.gain.value = wetAmount * 0.8;
-                fxSlot.dry.gain.value = 1 - wetAmount * 0.5;
+                fxDeck.wet.gain.value = wetAmount * 0.8;
+                fxDeck.dry.gain.value = 1 - wetAmount * 0.5;
 
                 // Increase echo feedback as we fade
-                const activeEffect = fxSlot.effects[fxSlot.activeEffect];
+                const activeEffect = fxDeck.effects[fxDeck.activeEffect];
                 if (activeEffect && activeEffect.feedback) {
                     activeEffect.feedback.gain.value = Math.min(0.85, 0.4 + progress * 0.45);
                 }
@@ -430,12 +430,12 @@ export class AutoTransition {
         if (this._echoCleanupNeeded) {
             // Reset FX wet/dry and feedback to defaults
             const djPlayer = this._getDJPlayer();
-            if (djPlayer && djPlayer.fx && djPlayer.fx.slots) {
-                djPlayer.fx.slots.forEach(slot => {
-                    if (slot) {
-                        slot.wet.gain.value = 0;
-                        slot.dry.gain.value = 1;
-                        const activeEffect = slot.effects[slot.activeEffect];
+            if (djPlayer && djPlayer.fx && djPlayer.fx.decks) {
+                Object.values(djPlayer.fx.decks).forEach(fxDeck => {
+                    if (fxDeck) {
+                        fxDeck.wet.gain.value = 0;
+                        fxDeck.dry.gain.value = 1;
+                        const activeEffect = fxDeck.effects[fxDeck.activeEffect];
                         if (activeEffect && activeEffect.feedback) {
                             activeEffect.feedback.gain.value = 0.4;
                         }

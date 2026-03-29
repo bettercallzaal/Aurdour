@@ -78,7 +78,7 @@ export class Settings {
         // MIDI profile save/load
         document.getElementById('midi-save-profile')?.addEventListener('click', () => {
             const name = prompt('Profile name:');
-            if (name) {
+            if (name && this.dj.midi) {
                 const profiles = this.dj.storage.get('midi_profiles', {});
                 profiles[name] = { ...this.dj.midi.mappings };
                 this.dj.storage.set('midi_profiles', profiles);
@@ -247,8 +247,10 @@ export class Settings {
             btn.className = 'btn-toolbar btn-sm';
             btn.textContent = name;
             btn.addEventListener('click', () => {
-                this.dj.midi.mappings = { ...profiles[name] };
-                this.dj.storage.saveMidiMappings(this.dj.midi.mappings);
+                if (this.dj.midi) {
+                    this.dj.midi.mappings = { ...profiles[name] };
+                    this.dj.storage.saveMidiMappings(this.dj.midi.mappings);
+                }
             });
             listEl.appendChild(btn);
         });

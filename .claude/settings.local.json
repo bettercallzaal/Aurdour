@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m http.server 8000)"
+      "Bash(python -m http.server 8000)",
+      "Bash(for f:*)",
+      "Bash(do node:*)"
     ]
   }
 }

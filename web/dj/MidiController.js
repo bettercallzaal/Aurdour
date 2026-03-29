@@ -600,7 +600,7 @@ export class MidiController {
         const router = this.dj.audioRouter;
         if (router) router.setMasterVolume(normalized);
 
-        const slider = document.getElementById('master-vol');
+        const slider = document.getElementById('master-volume');
         if (slider) slider.value = normalized * 100;
     }
 
@@ -633,7 +633,7 @@ export class MidiController {
         const router = this.dj.audioRouter;
         if (router) router.setCueVolume(normalized);
 
-        const slider = document.getElementById('cue-vol');
+        const slider = document.getElementById('cue-volume');
         if (slider) slider.value = normalized * 100;
     }
 
@@ -645,7 +645,7 @@ export class MidiController {
         const router = this.dj.audioRouter;
         if (router) router.setBoothVolume(normalized);
 
-        const slider = document.getElementById('booth-vol');
+        const slider = document.getElementById('booth-volume');
         if (slider) slider.value = normalized * 100;
     }
 
@@ -671,7 +671,7 @@ export class MidiController {
 
     _libraryBack() {
         // Cycle through library tabs: LOCAL → LIKED → AUDIUS
-        const tabs = document.querySelectorAll('.lib-tab');
+        const tabs = document.querySelectorAll('.library-tab');
         if (!tabs.length) return;
         const activeIdx = Array.from(tabs).findIndex(t => t.classList.contains('active'));
         const prevIdx = activeIdx > 0 ? activeIdx - 1 : tabs.length - 1;
@@ -681,7 +681,7 @@ export class MidiController {
     _triggerSampler(padIdx) {
         const sampler = this.dj.sampler;
         if (sampler) {
-            sampler.trigger(padIdx);
+            sampler.triggerPad(padIdx);
             _midiLog('action', `SAMPLER pad ${padIdx + 1} triggered`);
         } else {
             // Fallback: click the sampler pad button in the UI
@@ -745,7 +745,7 @@ export class MidiController {
     }
 
     _toggleFX(deckId) {
-        const btn = document.getElementById(`fx-toggle-${deckId.toLowerCase()}`);
+        const btn = document.getElementById(`fx-${deckId.toLowerCase()}-toggle`);
         if (btn) {
             btn.click();
             _midiLog('action', `FX toggled via UI button — Deck ${deckId}`);
@@ -796,12 +796,12 @@ export class MidiController {
             const deck = this.dj.decks?.[deckId];
             if (deck) {
                 const nudgeAmount = delta * 0.001;
-                const current = deck.ws?.getPlaybackRate() || 1;
-                deck.ws?.setPlaybackRate(current + nudgeAmount);
+                const current = deck.wavesurfer?.getPlaybackRate() || 1;
+                deck.wavesurfer?.setPlaybackRate(current + nudgeAmount);
                 // Reset after brief moment
                 clearTimeout(this._jogResetTimer);
                 this._jogResetTimer = setTimeout(() => {
-                    if (deck.ws) deck.ws.setPlaybackRate(deck.baseBPM ? (deck.ws.getPlaybackRate()) : 1);
+                    if (deck.wavesurfer) deck.wavesurfer.setPlaybackRate(deck.currentRate || 1);
                 }, 100);
             }
         }

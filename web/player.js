@@ -201,7 +201,7 @@ class DJPlayer {
             this._autoDetectBpmKey(deck);
 
             // Track play count
-            if (trackId) this.playlists.incrementPlayCount(trackId);
+            if (trackId && this.playlists) this.playlists.incrementPlayCount(trackId);
         };
 
         const onTimeUpdate = (deck, time) => {
@@ -229,6 +229,7 @@ class DJPlayer {
     }
 
     async _autoDetectBpmKey(deck) {
+        if (!this.bpmDetector) return;
         if (!deck.metadata) return;
         const meta = deck.metadata.metadata || {};
         const audioUrl = deck.metadata.audio_files?.mp3;
@@ -312,6 +313,7 @@ class DJPlayer {
     }
 
     _updateHarmonicDisplay() {
+        if (!this.harmonic) return;
         const keyA = this.decks.A.getKey();
         const keyB = this.decks.B.getKey();
         this.harmonic.updateDeckDisplay('A', keyA, keyB);
@@ -335,7 +337,7 @@ class DJPlayer {
             document.getElementById(`deck-${ch}-sync`)?.addEventListener('click', () => {
                 const otherDeck = deckId === 'A' ? this.decks.B : this.decks.A;
                 let targetBPM = otherDeck.getBPM();
-                if (!targetBPM && this.bpmTap.getBPM()) {
+                if (!targetBPM && this.bpmTap?.getBPM()) {
                     targetBPM = this.bpmTap.getBPM();
                 }
                 if (targetBPM) {
@@ -605,6 +607,14 @@ class DJPlayer {
             if (this.flowMode) this.flowMode.toggle();
         });
 
+        // Crossfader curve select in toolbar
+        const cfCurveSelect = document.getElementById('auto-trans-curve');
+        if (cfCurveSelect) {
+            cfCurveSelect.addEventListener('change', (e) => {
+                this.audioRouter.setCrossfaderCurve(e.target.value);
+            });
+        }
+
         // Wire AutoTransition completion to FlowMode
         if (this.autoTransition) {
             this.autoTransition.onComplete = (direction) => {
@@ -642,12 +652,16 @@ class DJPlayer {
                     break;
                 case 'KeyR':
                     if (e.ctrlKey || e.metaKey) return;
-                    if (this.recorder.isRecording) this.recorder.stop();
-                    else this.recorder.start();
+                    if (this.recorder) {
+                        if (this.recorder.isRecording) this.recorder.stop();
+                        else this.recorder.start();
+                    }
                     break;
                 case 'KeyV':
-                    if (this.visualizer.running) this.visualizer.stop();
-                    else this.visualizer.start();
+                    if (this.visualizer) {
+                        if (this.visualizer.running) this.visualizer.stop();
+                        else this.visualizer.start();
+                    }
                     break;
                 case 'KeyL':
                     if (e.shiftKey) this.decks.B.toggleLoop();
@@ -660,7 +674,7 @@ class DJPlayer {
                     (e.shiftKey ? this.decks.B : this.decks.A).setLoopOut();
                     break;
                 case 'KeyZ':
-                    if (e.ctrlKey || e.metaKey) {
+                    if ((e.ctrlKey || e.metaKey) && this.settings) {
                         e.preventDefault();
                         if (e.shiftKey) this.settings.redo();
                         else this.settings.undo();
@@ -885,7 +899,7 @@ class DJPlayer {
         const trackName = dataFile.split('/').pop().replace('.json', '');
 
         // Log to setlist
-        this.setlist.logPlay(trackName, '');
+        if (this.setlist) this.setlist.logPlay(trackName, '');
 
         // Log to recorder cue sheet
         if (this.recorder) {
@@ -920,6 +934,7 @@ class DJPlayer {
     }
 
     _initCrashRecovery() {
+        if (!this.crashRecovery) return;
         if (this.crashRecovery.hasRecoveryData()) {
             const data = this.crashRecovery.getRecoveryData();
             if (data) {
@@ -949,7 +964,7 @@ class DJPlayer {
     _loadSettings() {
         // Restore MIDI mappings
         const midiMappings = this.storage.loadMidiMappings();
-        if (midiMappings && Object.keys(midiMappings).length > 0) {
+        if (midiMappings && Object.keys(midiMappings).length > 0 && this.midi) {
             this.midi.mappings = midiMappings;
         }
 
