@@ -139,7 +139,8 @@
             </div>
 
             <div class="toolbar-group">
-                <button class="btn-toolbar btn-sm btn-help" id="tutorial-restart" title="Show tutorial">?</button>
+                <button class="btn-toolbar btn-sm btn-help" id="shortcuts-btn" title="Keyboard shortcuts (? or H)">?</button>
+                <button class="btn-toolbar btn-sm" id="tutorial-restart" title="Restart tutorial" style="display:none"></button>
             </div>
 
             <div class="toolbar-group pro-only">
@@ -161,14 +162,14 @@
         <!-- Reactions overlay -->
         <div id="reactions-container" class="reactions-container"></div>
 
-        <!-- Chat panel (collapsible) -->
+        <!-- Chat panel (collapsible, legacy — main chat is in stream-panel) -->
         <div class="chat-panel hidden" id="chat-panel">
             <div class="chat-header">
                 <span>CHAT</span>
                 <button class="btn-toolbar btn-sm" id="chat-close">X</button>
             </div>
-            <div class="chat-messages" id="chat-messages"></div>
-            <div class="chat-requests" id="requests-list"></div>
+            <div class="chat-messages" id="chat-panel-messages"></div>
+            <div class="chat-requests" id="chat-panel-requests"></div>
         </div>
 
         <!-- ===== DECKS ROW ===== -->
@@ -176,6 +177,12 @@
 
             <!-- ===== DECK A ===== -->
             <section class="deck deck-a" id="deck-a" data-tutorial="deck">
+                <div class="deck-drop-overlay" id="deck-a-drop-overlay">
+                    <div class="drop-overlay-content">
+                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span class="drop-overlay-text">Drop audio file here</span>
+                    </div>
+                </div>
                 <div class="deck-drop-hint" id="deck-a-hint">
                     <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 19V6l12-3v13"/><circle cx="6" cy="18" r="3" fill="none"/><circle cx="18" cy="15" r="3" fill="none"/></svg>
                     <span>Browse the library below to load a track</span>
@@ -189,6 +196,7 @@
                     </div>
                     <div class="track-meta">
                         <span class="bpm-display" id="deck-a-bpm">--- BPM</span>
+                        <span class="bpm-pulse" id="deck-a-bpm-pulse"></span>
                         <div class="key-row">
                             <span class="key-display" id="deck-a-key">--</span>
                             <span class="camelot-display" id="deck-a-camelot"></span>
@@ -347,14 +355,17 @@
                         <div class="eq-group">
                             <label>HI</label>
                             <input type="range" class="eq-knob" id="eq-a-high" min="-24" max="6" value="0">
+                            <button class="eq-kill-btn" id="eq-kill-a-high" title="Kill HI band">K</button>
                         </div>
                         <div class="eq-group">
                             <label>MID</label>
                             <input type="range" class="eq-knob" id="eq-a-mid" min="-24" max="6" value="0">
+                            <button class="eq-kill-btn" id="eq-kill-a-mid" title="Kill MID band">K</button>
                         </div>
                         <div class="eq-group">
                             <label>LOW</label>
                             <input type="range" class="eq-knob" id="eq-a-low" min="-24" max="6" value="0">
+                            <button class="eq-kill-btn" id="eq-kill-a-low" title="Kill LOW band">K</button>
                         </div>
                     </div>
                     <canvas class="level-meter" id="meter-a" width="24" height="160"></canvas>
@@ -369,14 +380,17 @@
                         <div class="eq-group">
                             <label>HI</label>
                             <input type="range" class="eq-knob" id="eq-b-high" min="-24" max="6" value="0">
+                            <button class="eq-kill-btn" id="eq-kill-b-high" title="Kill HI band">K</button>
                         </div>
                         <div class="eq-group">
                             <label>MID</label>
                             <input type="range" class="eq-knob" id="eq-b-mid" min="-24" max="6" value="0">
+                            <button class="eq-kill-btn" id="eq-kill-b-mid" title="Kill MID band">K</button>
                         </div>
                         <div class="eq-group">
                             <label>LOW</label>
                             <input type="range" class="eq-knob" id="eq-b-low" min="-24" max="6" value="0">
+                            <button class="eq-kill-btn" id="eq-kill-b-low" title="Kill LOW band">K</button>
                         </div>
                     </div>
                     <canvas class="level-meter" id="meter-b" width="24" height="160"></canvas>
@@ -387,6 +401,19 @@
                 <div class="phase-section pro-only">
                     <div class="hp-label">PHASE</div>
                     <canvas id="meter-phase" class="phase-meter" width="140" height="12"></canvas>
+                </div>
+
+                <!-- Mixer Tools (PRO) -->
+                <div class="mixer-tools-section pro-only">
+                    <div class="hp-label">FADER</div>
+                    <select class="toolbar-select" id="fader-curve-select" title="Channel fader curve">
+                        <option value="linear">Linear</option>
+                        <option value="logarithmic">Log</option>
+                    </select>
+                    <div class="mixer-tools-row">
+                        <button class="btn-mini mixer-tool-btn" id="limiter-toggle" title="Master limiter — prevents clipping">LIMIT</button>
+                        <button class="btn-mini mixer-tool-btn" id="autogain-toggle" title="Auto-gain — normalize track loudness on load">A.GAIN</button>
+                    </div>
                 </div>
 
                 <!-- Headphone / Cue controls (PRO) -->
@@ -423,6 +450,12 @@
 
             <!-- ===== DECK B ===== -->
             <section class="deck deck-b" id="deck-b">
+                <div class="deck-drop-overlay" id="deck-b-drop-overlay">
+                    <div class="drop-overlay-content">
+                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span class="drop-overlay-text">Drop audio file here</span>
+                    </div>
+                </div>
                 <div class="deck-drop-hint" id="deck-b-hint">
                     <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 19V6l12-3v13"/><circle cx="6" cy="18" r="3" fill="none"/><circle cx="18" cy="15" r="3" fill="none"/></svg>
                     <span>Load your second track here</span>
@@ -436,6 +469,7 @@
                     </div>
                     <div class="track-meta">
                         <span class="bpm-display" id="deck-b-bpm">--- BPM</span>
+                        <span class="bpm-pulse" id="deck-b-bpm-pulse"></span>
                         <div class="key-row">
                             <span class="key-display" id="deck-b-key">--</span>
                             <span class="camelot-display" id="deck-b-camelot"></span>
@@ -758,6 +792,10 @@
                 <div class="library-header">
                     <div class="library-tabs">
                         <button class="library-tab active" data-tab="local">LOCAL</button>
+                        <button class="library-tab" data-tab="recent">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            RECENT
+                        </button>
                         <button class="library-tab" data-tab="liked">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                             LIKED
@@ -1307,6 +1345,74 @@
         <div class="output-header">AUDIO OUTPUT</div>
         <select id="audio-output-select" class="toolbar-select" style="width:100%"></select>
         <button class="btn-toolbar btn-sm" id="audio-output-refresh">Refresh Devices</button>
+    </div>
+
+    <!-- ===== TOAST CONTAINER ===== -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- ===== RECENTLY LOADED TRACKS PANEL ===== -->
+    <div class="recent-tracks-panel hidden" id="recent-tracks-panel">
+        <div class="recent-tracks-header">
+            <span class="recent-tracks-title">RECENT TRACKS</span>
+            <button class="btn-mini recent-tracks-close" id="recent-tracks-close" title="Close">&times;</button>
+        </div>
+        <div class="recent-tracks-list" id="recent-tracks-list"></div>
+    </div>
+
+    <!-- ===== KEYBOARD SHORTCUTS OVERLAY ===== -->
+    <div class="shortcuts-overlay hidden" id="shortcuts-overlay">
+        <div class="shortcuts-backdrop" id="shortcuts-backdrop"></div>
+        <div class="shortcuts-panel">
+            <div class="shortcuts-header">
+                <span class="shortcuts-title">KEYBOARD SHORTCUTS</span>
+                <button class="btn-toolbar btn-sm shortcuts-close" id="shortcuts-close">ESC</button>
+            </div>
+            <div class="shortcuts-body">
+
+                <div class="shortcuts-category">
+                    <h3 class="shortcuts-cat-title">Transport</h3>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause active deck (Shift = Deck B)</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>Q</kbd></span><span class="shortcut-desc">Play / Pause Deck A</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>W</kbd></span><span class="shortcut-desc">Play / Pause Deck B</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>A</kbd></span><span class="shortcut-desc">Cue Deck A</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>S</kbd></span><span class="shortcut-desc">Cue Deck B</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>Z</kbd></span><span class="shortcut-desc">Sync Deck A to Deck B's BPM</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>X</kbd></span><span class="shortcut-desc">Sync Deck B to Deck A's BPM</span></div>
+                </div>
+
+                <div class="shortcuts-category">
+                    <h3 class="shortcuts-cat-title">Mixing</h3>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>&larr;</kbd> / <kbd>&rarr;</kbd></span><span class="shortcut-desc">Move crossfader left / right</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>&uarr;</kbd> / <kbd>&darr;</kbd></span><span class="shortcut-desc">Volume up / down (Shift = Deck B)</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>=</kbd> / <kbd>-</kbd></span><span class="shortcut-desc">Tempo up / down on active deck</span></div>
+                </div>
+
+                <div class="shortcuts-category">
+                    <h3 class="shortcuts-cat-title">Hot Cues &amp; Loops</h3>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>1</kbd>-<kbd>8</kbd></span><span class="shortcut-desc">Hot cue pads Deck A (Shift = Deck B)</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>1</kbd>-<kbd>8</kbd></span><span class="shortcut-desc">Hot cue pads Deck B</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>L</kbd></span><span class="shortcut-desc">Toggle loop Deck A (Shift = Deck B)</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>[</kbd> / <kbd>]</kbd></span><span class="shortcut-desc">Set loop in / out (Shift = Deck B)</span></div>
+                </div>
+
+                <div class="shortcuts-category">
+                    <h3 class="shortcuts-cat-title">Effects &amp; Recording</h3>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>R</kbd></span><span class="shortcut-desc">Toggle recording</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>V</kbd></span><span class="shortcut-desc">Toggle visualizer</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>M</kbd></span><span class="shortcut-desc">Toggle mic mute</span></div>
+                </div>
+
+                <div class="shortcuts-category">
+                    <h3 class="shortcuts-cat-title">Navigation</h3>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>F</kbd></span><span class="shortcut-desc">Toggle Flow Mode (Auto-DJ)</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>?</kbd> or <kbd>H</kbd></span><span class="shortcut-desc">Toggle this shortcuts panel</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>Escape</kbd></span><span class="shortcut-desc">Close any open panel</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>T</kbd></span><span class="shortcut-desc">BPM tap</span></div>
+                    <div class="shortcut-row"><span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Z</kbd></span><span class="shortcut-desc">Undo (Shift = Redo)</span></div>
+                </div>
+
+            </div>
+        </div>
     </div>
 </body>
 </html>

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python -m http.server 8000)",
       "Bash(for f:*)",
-      "Bash(do node:*)"
+      "Bash(do node:*)",
+      "Bash(node -c web/dj/MidiController.js)"
     ]
   }
 }

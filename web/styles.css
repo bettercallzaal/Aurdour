@@ -2560,6 +2560,217 @@ body:not(.pro-mode) .bottom-row {
 .deck-a.drag-over { outline-color: var(--accent-a); }
 .deck-b.drag-over { outline-color: var(--accent-b); }
 
+/* ===== Deck Drop Active Overlay ===== */
+
+.deck-drop-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    background: rgba(6, 6, 12, 0.85);
+    border-radius: var(--radius-md);
+    pointer-events: none;
+}
+
+.deck.deck-drop-active .deck-drop-overlay {
+    display: flex;
+}
+
+.deck.deck-drop-active {
+    outline: none;
+}
+
+.drop-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    border: 2px dashed var(--accent-a);
+    border-radius: var(--radius-lg);
+    animation: dropPulseBorder 1.2s ease-in-out infinite;
+}
+
+.deck-b.deck-drop-active .drop-overlay-content {
+    border-color: var(--accent-b);
+}
+
+.drop-overlay-content svg {
+    opacity: 0.8;
+    animation: dropBounce 1s ease-in-out infinite;
+}
+
+.deck-a.deck-drop-active .drop-overlay-content svg { color: var(--accent-a); }
+.deck-b.deck-drop-active .drop-overlay-content svg { color: var(--accent-b); }
+
+.drop-overlay-text {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.deck-a.deck-drop-active .drop-overlay-text { color: var(--accent-a); }
+.deck-b.deck-drop-active .drop-overlay-text { color: var(--accent-b); }
+
+@keyframes dropPulseBorder {
+    0%, 100% { border-color: var(--accent-a); box-shadow: 0 0 20px rgba(0, 212, 255, 0.1); }
+    50% { border-color: rgba(0, 212, 255, 0.4); box-shadow: 0 0 40px rgba(0, 212, 255, 0.2); }
+}
+
+.deck-b.deck-drop-active .drop-overlay-content {
+    animation-name: dropPulseBorderB;
+}
+
+@keyframes dropPulseBorderB {
+    0%, 100% { border-color: var(--accent-b); box-shadow: 0 0 20px rgba(255, 107, 53, 0.1); }
+    50% { border-color: rgba(255, 107, 53, 0.4); box-shadow: 0 0 40px rgba(255, 107, 53, 0.2); }
+}
+
+@keyframes dropBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+/* ===== LOAD File Buttons ===== */
+
+.load-file-btn {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.deck-a .load-file-btn {
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.4);
+    color: var(--accent-a);
+}
+
+.deck-a .load-file-btn:hover {
+    background: rgba(0, 212, 255, 0.2);
+    border-color: var(--accent-a);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+}
+
+.deck-b .load-file-btn {
+    background: rgba(255, 107, 53, 0.1);
+    border: 1px solid rgba(255, 107, 53, 0.4);
+    color: var(--accent-b);
+}
+
+.deck-b .load-file-btn:hover {
+    background: rgba(255, 107, 53, 0.2);
+    border-color: var(--accent-b);
+    box-shadow: 0 0 12px rgba(255, 107, 53, 0.15);
+}
+
+/* ===== Library Drag Feedback ===== */
+
+.library-table tbody tr[draggable="true"] {
+    cursor: grab;
+}
+
+.library-table tbody tr[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.library-table tbody tr.lib-row-dragging {
+    opacity: 0.4;
+    background: rgba(0, 212, 255, 0.06);
+}
+
+/* ===== Toast Notifications ===== */
+
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: auto;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast-error {
+    background: rgba(255, 34, 0, 0.15);
+    color: #ff6b6b;
+    border: 1px solid rgba(255, 34, 0, 0.3);
+}
+
+.toast-success {
+    background: rgba(0, 255, 136, 0.15);
+    color: #00ff88;
+    border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.toast-info {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent-a);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+/* ===== Recently Loaded Tracks Tab ===== */
+
+.library-tab[data-tab="recent"].active {
+    background: rgba(0, 212, 255, 0.12);
+    color: var(--accent-a);
+}
+
+.recent-clear-btn {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-control);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.recent-clear-btn:hover {
+    color: #ff6b6b;
+    border-color: rgba(255, 107, 107, 0.3);
+}
+
+.recent-timestamp {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
 
 /* ================================================================
    PLAYLISTS SIDEBAR
@@ -4095,4 +4306,744 @@ input[type="range"] {
 .pwa-install-banner button:hover {
     background: rgba(0, 212, 255, 0.2);
     color: #fff;
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Waveform Glow Effects
+   Deck A = blue glow, Deck B = orange glow
+   Pulsing glow when playing
+   ================================================================ */
+
+.deck-a .waveform-main {
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.06), inset 0 0 8px rgba(0, 212, 255, 0.03);
+    border-color: rgba(0, 212, 255, 0.12);
+}
+
+.deck-a .waveform-overview {
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.04);
+    border-color: rgba(0, 212, 255, 0.1);
+}
+
+.deck-b .waveform-main {
+    box-shadow: 0 0 12px rgba(255, 107, 53, 0.06), inset 0 0 8px rgba(255, 107, 53, 0.03);
+    border-color: rgba(255, 107, 53, 0.12);
+}
+
+.deck-b .waveform-overview {
+    box-shadow: 0 0 8px rgba(255, 107, 53, 0.04);
+    border-color: rgba(255, 107, 53, 0.1);
+}
+
+.deck-a.playing .waveform-main {
+    border-color: rgba(0, 212, 255, 0.3);
+    animation: waveformGlowA 2s ease-in-out infinite;
+}
+
+.deck-a.playing .waveform-overview {
+    border-color: rgba(0, 212, 255, 0.2);
+}
+
+@keyframes waveformGlowA {
+    0%, 100% {
+        box-shadow: 0 0 14px rgba(0, 212, 255, 0.08), 0 0 30px rgba(0, 212, 255, 0.03), inset 0 0 10px rgba(0, 212, 255, 0.04);
+    }
+    50% {
+        box-shadow: 0 0 22px rgba(0, 212, 255, 0.15), 0 0 50px rgba(0, 212, 255, 0.06), inset 0 0 14px rgba(0, 212, 255, 0.06);
+    }
+}
+
+.deck-b.playing .waveform-main {
+    border-color: rgba(255, 107, 53, 0.3);
+    animation: waveformGlowB 2s ease-in-out infinite;
+}
+
+.deck-b.playing .waveform-overview {
+    border-color: rgba(255, 107, 53, 0.2);
+}
+
+@keyframes waveformGlowB {
+    0%, 100% {
+        box-shadow: 0 0 14px rgba(255, 107, 53, 0.08), 0 0 30px rgba(255, 107, 53, 0.03), inset 0 0 10px rgba(255, 107, 53, 0.04);
+    }
+    50% {
+        box-shadow: 0 0 22px rgba(255, 107, 53, 0.15), 0 0 50px rgba(255, 107, 53, 0.06), inset 0 0 14px rgba(255, 107, 53, 0.06);
+    }
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Animated BPM Pulse Dot
+   ================================================================ */
+
+.bpm-pulse {
+    display: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-a);
+    flex-shrink: 0;
+    margin-left: 2px;
+}
+
+.deck-b .bpm-pulse {
+    background: var(--accent-b);
+}
+
+.bpm-pulse.active {
+    display: inline-block;
+    animation: bpmBlink var(--bpm-interval, 0.5s) ease-in-out infinite;
+}
+
+@keyframes bpmBlink {
+    0%, 100% {
+        opacity: 0.2;
+        box-shadow: 0 0 2px currentColor;
+        transform: scale(0.85);
+    }
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
+        transform: scale(1.1);
+    }
+}
+
+.deck-a .bpm-pulse.active {
+    box-shadow: 0 0 6px rgba(0, 212, 255, 0.5);
+}
+
+.deck-b .bpm-pulse.active {
+    box-shadow: 0 0 6px rgba(255, 107, 53, 0.5);
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Active Deck Indicator (.deck.playing)
+   ================================================================ */
+
+.deck.playing {
+    border-top-width: 2px;
+    position: relative;
+}
+
+.deck-a.playing {
+    border-top-color: rgba(0, 212, 255, 0.35);
+    box-shadow: inset 0 1px 30px rgba(0, 212, 255, 0.03), 0 -1px 20px rgba(0, 212, 255, 0.06);
+}
+
+.deck-b.playing {
+    border-top-color: rgba(255, 107, 53, 0.35);
+    box-shadow: inset 0 1px 30px rgba(255, 107, 53, 0.03), 0 -1px 20px rgba(255, 107, 53, 0.06);
+}
+
+.deck.playing::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.deck-a.playing::before {
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.5) 20%, rgba(0, 212, 255, 0.8) 50%, rgba(0, 212, 255, 0.5) 80%, transparent);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.3), 0 0 30px rgba(0, 212, 255, 0.1);
+}
+
+.deck-b.playing::before {
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.5) 20%, rgba(255, 107, 53, 0.8) 50%, rgba(255, 107, 53, 0.5) 80%, transparent);
+    box-shadow: 0 0 12px rgba(255, 107, 53, 0.3), 0 0 30px rgba(255, 107, 53, 0.1);
+}
+
+.deck-a.playing .deck-label-a {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    border-color: rgba(0, 212, 255, 0.5);
+}
+
+.deck-b.playing .deck-label-b {
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 107, 53, 0.5);
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Crossfader Gradient + Thumb Glow
+   ================================================================ */
+
+.crossfader {
+    background: linear-gradient(90deg,
+        rgba(0, 212, 255, 0.25) 0%,
+        rgba(0, 212, 255, 0.1) 15%,
+        var(--fader-track) 35%,
+        var(--fader-track) 65%,
+        rgba(255, 107, 53, 0.1) 85%,
+        rgba(255, 107, 53, 0.25) 100%
+    ) !important;
+    border: 1px solid rgba(100, 100, 180, 0.12);
+}
+
+.crossfader::-webkit-slider-thumb {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35), 0 0 8px rgba(180, 180, 255, 0.12), 0 0 1px rgba(255, 255, 255, 0.15) !important;
+    transition: box-shadow 0.2s, transform 0.15s;
+}
+
+.crossfader::-webkit-slider-thumb:hover {
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.4), 0 0 16px rgba(140, 140, 255, 0.2), 0 0 30px rgba(140, 140, 255, 0.08) !important;
+    transform: scale(1.08);
+}
+
+.crossfader::-webkit-slider-thumb:active {
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5), 0 0 20px rgba(140, 140, 255, 0.25), 0 0 40px rgba(140, 140, 255, 0.1) !important;
+    transform: scale(1.02);
+}
+
+.crossfader::-moz-range-thumb {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35), 0 0 8px rgba(180, 180, 255, 0.12) !important;
+}
+
+.crossfader::-moz-range-thumb:hover {
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.4), 0 0 16px rgba(140, 140, 255, 0.2), 0 0 30px rgba(140, 140, 255, 0.08) !important;
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Transport Button Press Animations
+   ================================================================ */
+
+.btn-transport {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change: transform, box-shadow;
+}
+
+.btn-transport:active {
+    transform: scale(0.9) !important;
+    transition-duration: 0.08s !important;
+}
+
+.btn-cue:active {
+    color: var(--color-cue) !important;
+    border-color: var(--color-cue) !important;
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.25), inset 0 0 12px rgba(255, 204, 0, 0.08) !important;
+}
+
+.btn-sync:active {
+    color: var(--color-sync) !important;
+    border-color: var(--color-sync) !important;
+    box-shadow: 0 0 20px rgba(255, 68, 170, 0.25), inset 0 0 12px rgba(255, 68, 170, 0.08) !important;
+}
+
+.btn-play.playing {
+    box-shadow: 0 0 28px rgba(0, 255, 136, 0.25), 0 0 60px rgba(0, 255, 136, 0.08), inset 0 0 20px rgba(0, 255, 136, 0.05) !important;
+}
+
+.btn-play:active {
+    transform: scale(0.88) !important;
+    box-shadow: 0 0 30px rgba(0, 255, 136, 0.3), inset 0 0 16px rgba(0, 255, 136, 0.1) !important;
+    transition-duration: 0.06s !important;
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Hot Cue Pad Glow
+   ================================================================ */
+
+.cue-pad.set {
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    animation: cuePadGlow 2.5s ease-in-out infinite;
+}
+
+@keyframes cuePadGlow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.15); }
+}
+
+.cue-pad.set:hover {
+    filter: brightness(1.3);
+    transform: translateY(-1px);
+}
+
+.cue-pad.set:active {
+    filter: brightness(1.6);
+    transform: scale(0.94);
+    transition-duration: 0.05s;
+}
+
+.cue-pad:not(.set):hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(120, 120, 200, 0.3);
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Loading / Analyzing Shimmer
+   ================================================================ */
+
+.deck.loading .waveform-main,
+.deck.analyzing .waveform-main {
+    position: relative;
+    overflow: hidden;
+}
+
+.deck.loading .waveform-main::after,
+.deck.analyzing .waveform-main::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 0%, transparent 35%, rgba(255, 255, 255, 0.04) 42%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.04) 58%, transparent 65%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmerLoad 1.8s ease-in-out infinite;
+}
+
+.deck-a.loading .waveform-main::after,
+.deck-a.analyzing .waveform-main::after {
+    background: linear-gradient(105deg, transparent 0%, transparent 35%, rgba(0, 212, 255, 0.04) 42%, rgba(0, 212, 255, 0.1) 50%, rgba(0, 212, 255, 0.04) 58%, transparent 65%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmerLoad 1.8s ease-in-out infinite;
+}
+
+.deck-b.loading .waveform-main::after,
+.deck-b.analyzing .waveform-main::after {
+    background: linear-gradient(105deg, transparent 0%, transparent 35%, rgba(255, 107, 53, 0.04) 42%, rgba(255, 107, 53, 0.1) 50%, rgba(255, 107, 53, 0.04) 58%, transparent 65%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmerLoad 1.8s ease-in-out infinite;
+}
+
+@keyframes shimmerLoad {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.deck-a.loading .waveform-main {
+    border-color: rgba(0, 212, 255, 0.2);
+    animation: borderPulseA 1.5s ease-in-out infinite;
+}
+
+.deck-b.loading .waveform-main {
+    border-color: rgba(255, 107, 53, 0.2);
+    animation: borderPulseB 1.5s ease-in-out infinite;
+}
+
+@keyframes borderPulseA {
+    0%, 100% { border-color: rgba(0, 212, 255, 0.12); }
+    50% { border-color: rgba(0, 212, 255, 0.3); }
+}
+
+@keyframes borderPulseB {
+    0%, 100% { border-color: rgba(255, 107, 53, 0.12); }
+    50% { border-color: rgba(255, 107, 53, 0.3); }
+}
+
+.deck.loading .track-title {
+    background: linear-gradient(90deg, var(--text-primary) 40%, rgba(255, 255, 255, 0.6) 50%, var(--text-primary) 60%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: textShimmer 2s ease-in-out infinite;
+}
+
+@keyframes textShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+
+/* ================================================================
+   VISUAL POLISH — Smoother UI State Transitions
+   ================================================================ */
+
+.chat-panel,
+.stream-panel,
+.suggest-panel,
+.settings-panel,
+.plugins-panel,
+.flow-panel {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+.library-tab {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.library-table tbody tr {
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.library-table tbody tr:hover {
+    box-shadow: inset 0 0 30px rgba(0, 212, 255, 0.02);
+}
+
+.pro-only {
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.fx-section,
+.stems-section,
+.loop-controls,
+.hot-cue-pads,
+.pitch-row,
+.key-shift-section,
+.jog-section {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.eq-knob,
+.fx-knob,
+.stem-fader,
+.vol-fader {
+    transition: box-shadow 0.2s ease;
+}
+
+.eq-knob:active::-webkit-slider-thumb,
+.fx-knob:active::-webkit-slider-thumb {
+    box-shadow: 0 0 8px rgba(200, 200, 255, 0.25);
+}
+
+.btn-mini,
+.btn-toolbar,
+.btn-aux,
+.btn-load {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deck-drop-hint {
+    transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.track-title,
+.track-artist,
+.bpm-display,
+.key-display {
+    transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+.setlist-item {
+    transition: background 0.15s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+
+.library-search {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, width 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.bottom-row {
+    transition: max-height 0.3s ease, min-height 0.3s ease;
+}
+
+.crossfader-section {
+    transition: padding 0.3s ease;
+}
+
+.level-meter {
+    transition: box-shadow 0.3s ease;
+}
+
+.deck {
+    transition: border-color 0.3s ease, box-shadow 0.4s ease, background 0.4s ease;
+}
+
+
+/* ================================================================
+   KEYBOARD SHORTCUTS OVERLAY
+   ================================================================ */
+
+.shortcuts-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: shortcuts-fadein 0.2s ease;
+}
+
+.shortcuts-overlay.hidden {
+    display: none;
+}
+
+@keyframes shortcuts-fadein {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.shortcuts-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 4, 12, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.shortcuts-panel {
+    position: relative;
+    z-index: 10001;
+    background: linear-gradient(160deg, #111124, #0c0c1a);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: var(--radius-lg);
+    width: 720px;
+    max-width: 92vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.6),
+        0 0 1px rgba(0, 212, 255, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    animation: shortcuts-slidein 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes shortcuts-slidein {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.shortcuts-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.shortcuts-title {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-a);
+}
+
+.shortcuts-close {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    cursor: pointer;
+}
+
+.shortcuts-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.shortcuts-category {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.shortcuts-cat-title {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-a);
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.shortcut-keys {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
+.shortcut-keys kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 6px;
+    background: rgba(30, 30, 60, 0.8);
+    border: 1px solid rgba(80, 80, 140, 0.3);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.shortcut-desc {
+    font-family: var(--font-ui);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1.3;
+}
+
+/* Responsive: single column on narrow screens */
+@media (max-width: 600px) {
+    .shortcuts-body {
+        grid-template-columns: 1fr;
+        padding: 12px 16px;
+    }
+
+    .shortcuts-panel {
+        width: 95vw;
+        max-height: 90vh;
+    }
+}
+
+
+/* ================================================================
+   KEY-PRESS FEEDBACK ANIMATION
+   ================================================================ */
+
+@keyframes key-pressed-flash {
+    0% {
+        box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.8), 0 0 20px rgba(0, 212, 255, 0.4);
+        background-color: rgba(0, 212, 255, 0.15);
+    }
+    100% {
+        box-shadow: none;
+        background-color: transparent;
+    }
+}
+
+.key-pressed {
+    animation: key-pressed-flash 0.4s ease-out !important;
+}
+
+
+/* ================================================================
+   EQ KILL BUTTONS
+   ================================================================ */
+
+.eq-kill-btn {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 0.5rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    background: var(--bg-control);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.eq-kill-btn:hover {
+    border-color: var(--meter-red);
+    color: var(--meter-red);
+    background: rgba(255, 34, 0, 0.08);
+}
+
+.eq-kill-btn.active {
+    background: rgba(255, 34, 0, 0.2);
+    border-color: var(--meter-red);
+    color: var(--meter-red);
+    box-shadow: 0 0 8px rgba(255, 34, 0, 0.35), inset 0 0 4px rgba(255, 34, 0, 0.15);
+    text-shadow: 0 0 6px rgba(255, 34, 0, 0.5);
+    animation: eq-kill-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes eq-kill-pulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(255, 34, 0, 0.3), inset 0 0 4px rgba(255, 34, 0, 0.15); }
+    50% { box-shadow: 0 0 12px rgba(255, 34, 0, 0.5), inset 0 0 6px rgba(255, 34, 0, 0.25); }
+}
+
+
+/* ================================================================
+   MIXER TOOLS (Fader Curve, Limiter, Auto-Gain)
+   ================================================================ */
+
+.mixer-tools-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border-subtle);
+    width: 100%;
+}
+
+.mixer-tools-section .hp-label {
+    margin-bottom: 2px;
+}
+
+.mixer-tools-section select {
+    width: 100%;
+    font-size: 0.55rem;
+}
+
+.mixer-tools-row {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+}
+
+.mixer-tool-btn {
+    flex: 1;
+    text-align: center;
+    font-size: 0.5rem !important;
+    padding: 3px 4px !important;
+}
+
+.mixer-tool-btn.active {
+    color: var(--color-play) !important;
+    border-color: var(--color-play) !important;
+    background: rgba(0, 255, 136, 0.1) !important;
+    box-shadow: 0 0 6px rgba(0, 255, 136, 0.15);
+}
+
+/* Limiter active state */
+#limiter-toggle.active {
+    color: var(--accent-b) !important;
+    border-color: var(--accent-b) !important;
+    background: rgba(255, 107, 53, 0.12) !important;
+    box-shadow: 0 0 8px rgba(255, 107, 53, 0.2);
+}
+
+/* Limiter reducing — visual feedback when gain reduction is happening */
+#limiter-toggle.limiting {
+    color: var(--meter-red) !important;
+    border-color: var(--meter-red) !important;
+    box-shadow: 0 0 10px rgba(255, 34, 0, 0.3);
+}
+
+/* Auto-gain active */
+#autogain-toggle.active {
+    color: var(--accent-a) !important;
+    border-color: var(--accent-a) !important;
+    background: rgba(0, 212, 255, 0.1) !important;
+    box-shadow: 0 0 6px rgba(0, 212, 255, 0.15);
+}
+
+/* Split cue active — improved visual */
+#split-cue.active {
+    color: var(--color-cue) !important;
+    border-color: var(--color-cue) !important;
+    background: rgba(255, 204, 0, 0.1) !important;
+    box-shadow: 0 0 8px rgba(255, 204, 0, 0.2);
 }

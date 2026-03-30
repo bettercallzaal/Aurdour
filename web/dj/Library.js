@@ -52,6 +52,9 @@ export class Library {
         if (this.activeTab === 'local') {
             this.searchInput.placeholder = 'Search local tracks...';
             this._filterAndRender();
+        } else if (this.activeTab === 'recent') {
+            this.searchInput.placeholder = 'Search recent tracks...';
+            this._renderRecent();
         } else if (this.activeTab === 'liked') {
             this.searchInput.placeholder = 'Search liked tracks...';
             this._renderLiked();
@@ -84,6 +87,8 @@ export class Library {
     _onSearchInput() {
         if (this.activeTab === 'local') {
             this._filterAndRender();
+        } else if (this.activeTab === 'recent') {
+            this._renderRecent();
         } else if (this.activeTab === 'liked') {
             this._renderLiked();
         } else if (this.activeTab === 'audius') {
@@ -159,6 +164,9 @@ export class Library {
     }
 
     _getCurrentList() {
+        if (this.activeTab === 'recent') {
+            try { return JSON.parse(localStorage.getItem('aurdour_recent_tracks') || '[]'); } catch { return []; }
+        }
         if (this.activeTab === 'liked') return this.playlists ? this.playlists.getLikedTracks() : [];
         if (this.activeTab === 'audius') return this.audiusTracks;
         if (this.activeTab === 'soundcloud') return this.soundcloudTracks;
@@ -375,6 +383,123 @@ export class Library {
         });
     }
 
+    // ===== Recently loaded tracks tab =====
+
+    _renderRecent() {
+        if (!this.tableBody) return;
+        this.tableBody.textContent = '';
+        this.selectedIndex = -1;
+        this.selectedTrack = null;
+
+        let recentTracks = [];
+        try {
+            recentTracks = JSON.parse(localStorage.getItem('aurdour_recent_tracks') || '[]');
+        } catch {
+            recentTracks = [];
+        }
+
+        const query = (this.searchInput?.value || '').toLowerCase();
+        if (query) {
+            recentTracks = recentTracks.filter(t =>
+                (t.title || '').toLowerCase().includes(query) ||
+                (t.artist || '').toLowerCase().includes(query) ||
+                (t.fileName || '').toLowerCase().includes(query));
+        }
+
+        if (recentTracks.length === 0) {
+            const row = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 7;
+            td.style.textAlign = 'center';
+            td.style.color = '#555577';
+            td.style.padding = '20px';
+            td.textContent = query ? 'No recent tracks match your search.' : 'No recently loaded tracks yet. Load an audio file to see it here.';
+            row.appendChild(td);
+            this.tableBody.appendChild(row);
+            return;
+        }
+
+        // Add a clear button row at top
+        const clearRow = document.createElement('tr');
+        const clearTd = document.createElement('td');
+        clearTd.colSpan = 7;
+        clearTd.style.textAlign = 'right';
+        clearTd.style.padding = '4px 12px';
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'recent-clear-btn';
+        clearBtn.textContent = 'CLEAR HISTORY';
+        clearBtn.addEventListener('click', () => {
+            try { localStorage.removeItem('aurdour_recent_tracks'); } catch {}
+            this._renderRecent();
+        });
+        clearTd.appendChild(clearBtn);
+        clearRow.appendChild(clearTd);
+        this.tableBody.appendChild(clearRow);
+
+        recentTracks.forEach(track => {
+            const row = document.createElement('tr');
+
+            const tdTitle = document.createElement('td');
+            tdTitle.className = 'lib-title';
+            tdTitle.textContent = track.title || track.fileName || '-';
+
+            const tdArtist = document.createElement('td');
+            tdArtist.className = 'lib-artist';
+            tdArtist.textContent = track.artist || '-';
+
+            const tdBpm = document.createElement('td');
+            tdBpm.className = 'lib-bpm';
+            tdBpm.textContent = '-';
+
+            const tdKey = document.createElement('td');
+            tdKey.className = 'lib-key';
+            tdKey.textContent = '-';
+
+            const tdDuration = document.createElement('td');
+            tdDuration.className = 'lib-duration';
+            // Show relative time since loaded
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'recent-timestamp';
+            timeSpan.textContent = this._formatTimeAgo(track.loadedAt);
+            timeSpan.title = track.loadedAt ? new Date(track.loadedAt).toLocaleString() : '';
+            tdDuration.appendChild(timeSpan);
+
+            const tdActions = document.createElement('td');
+            tdActions.className = 'lib-actions';
+
+            // Recent tracks are local files -- blob URLs expire, so show filename as reference
+            const infoSpan = document.createElement('span');
+            infoSpan.style.cssText = 'font-size:0.55rem;color:var(--text-dim);font-family:var(--font-mono);';
+            infoSpan.textContent = track.fileName || '';
+            infoSpan.title = 'Use LOAD button or drag file to reload';
+            tdActions.appendChild(infoSpan);
+
+            row.appendChild(tdTitle);
+            row.appendChild(tdArtist);
+            row.appendChild(tdBpm);
+            row.appendChild(tdKey);
+            row.appendChild(tdDuration);
+            row.appendChild(tdActions);
+
+            this.tableBody.appendChild(row);
+        });
+    }
+
+    _formatTimeAgo(timestamp) {
+        if (!timestamp) return '-';
+        const now = Date.now();
+        const diff = now - timestamp;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        if (days < 7) return `${days}d ago`;
+        return new Date(timestamp).toLocaleDateString();
+    }
+
     _renderLoading(msg) {
         if (!this.tableBody) return;
         this.tableBody.textContent = '';
@@ -435,7 +560,7 @@ export class Library {
         this._renderLoading('Searching Spotify...');
         try {
             this.spotifyTracks = await this.spotify.search(query);
-            this._renderSoundCloud(this.spotifyTracks); // reuse the same render format
+            this._renderStreamingTracks(this.spotifyTracks, 'Spotify');
         } catch (e) {
             console.error('[Library] Spotify search failed:', e);
             this._renderError('Spotify search failed. Try again.');
@@ -449,7 +574,7 @@ export class Library {
         this._renderLoading('Searching SoundCloud...');
         try {
             this.soundcloudTracks = await this.soundcloud.search(query);
-            this._renderSoundCloud(this.soundcloudTracks);
+            this._renderStreamingTracks(this.soundcloudTracks, 'SoundCloud');
         } catch (e) {
             console.error('[Library] SoundCloud search failed:', e);
             this._renderError('SoundCloud search failed. Try again.');
@@ -461,14 +586,14 @@ export class Library {
         this._renderLoading('Loading trending...');
         try {
             this.soundcloudTracks = await this.soundcloud.getTrending(30);
-            this._renderSoundCloud(this.soundcloudTracks);
+            this._renderStreamingTracks(this.soundcloudTracks, 'SoundCloud');
         } catch (e) {
             console.error('[Library] SoundCloud trending failed:', e);
             this._renderError('Could not load SoundCloud trending.');
         }
     }
 
-    _renderSoundCloud(tracks) {
+    _renderStreamingTracks(tracks, sourceName = 'SoundCloud') {
         if (!this.tableBody) return;
         this.tableBody.textContent = '';
         this.selectedIndex = -1;
@@ -481,7 +606,7 @@ export class Library {
             td.style.textAlign = 'center';
             td.style.color = '#555577';
             td.style.padding = '16px';
-            td.textContent = 'No tracks found on SoundCloud';
+            td.textContent = `No tracks found on ${sourceName}`;
             row.appendChild(td);
             this.tableBody.appendChild(row);
             return;

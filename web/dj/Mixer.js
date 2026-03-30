@@ -40,6 +40,15 @@ export class Mixer {
                         this.router.setEQ(deckId, band, 0);
                     });
                 }
+
+                // EQ Kill button
+                const killBtn = document.getElementById(`eq-kill-${ch}-${band}`);
+                if (killBtn) {
+                    killBtn.addEventListener('click', () => {
+                        const killed = this.router.toggleEQKill(deckId, band);
+                        killBtn.classList.toggle('active', killed);
+                    });
+                }
             });
         });
 
@@ -48,6 +57,34 @@ export class Mixer {
         if (masterVol) {
             masterVol.addEventListener('input', (e) => {
                 this.router.setMasterVolume(e.target.value / 100);
+            });
+        }
+
+        // Fader curve select
+        const faderCurveSelect = document.getElementById('fader-curve-select');
+        if (faderCurveSelect) {
+            faderCurveSelect.addEventListener('change', (e) => {
+                this.router.setFaderCurve(e.target.value);
+            });
+        }
+
+        // Limiter toggle
+        const limiterBtn = document.getElementById('limiter-toggle');
+        if (limiterBtn) {
+            limiterBtn.addEventListener('click', () => {
+                const enabled = !this.router.limiterEnabled;
+                this.router.setLimiterEnabled(enabled);
+                limiterBtn.classList.toggle('active', enabled);
+            });
+        }
+
+        // Auto-gain toggle
+        const autoGainBtn = document.getElementById('autogain-toggle');
+        if (autoGainBtn) {
+            autoGainBtn.addEventListener('click', () => {
+                const enabled = !this.router.autoGainEnabled;
+                this.router.setAutoGain(enabled);
+                autoGainBtn.classList.toggle('active', enabled);
             });
         }
     }

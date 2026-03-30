@@ -70,8 +70,10 @@ export class StemSeparator {
         const splitter = this.ctx.createGain();
         const merger = this.ctx.createGain();
 
-        // Disconnect EQ → channelGain and insert stems
-        ch.eqHigh.disconnect(ch.channelGain);
+        // Disconnect EQ → filter and insert stems between eqHigh and filter
+        // Original chain: eqHigh -> filter -> channelGain -> crossfadeGain
+        // New chain: eqHigh -> splitter -> [stems] -> merger -> filter -> channelGain
+        ch.eqHigh.disconnect(ch.filter);
 
         // Route through stems
         ch.eqHigh.connect(splitter);
@@ -98,7 +100,7 @@ export class StemSeparator {
         stems.other.filter.connect(stems.other.gain);
         stems.other.gain.connect(merger);
 
-        merger.connect(ch.channelGain);
+        merger.connect(ch.filter);
 
         deck.insertNode = splitter;
         deck.outputNode = merger;
@@ -126,8 +128,8 @@ export class StemSeparator {
             });
         } catch (e) {}
 
-        // Restore direct connection
-        ch.eqHigh.connect(ch.channelGain);
+        // Restore direct connection: eqHigh → filter (original chain)
+        ch.eqHigh.connect(ch.filter);
 
         this.enabled[deckId] = false;
         this._updateUI(deckId);

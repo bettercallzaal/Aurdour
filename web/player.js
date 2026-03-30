@@ -187,6 +187,24 @@ class DJPlayer {
             this.broadcast?.updateTrackInfo(deck.id, deck.metadata);
             this._updateHarmonicDisplay();
 
+            // Visual polish: remove loading shimmer, activate BPM pulse
+            const deckPrefix = deck.id.toLowerCase();
+            const deckEl = document.getElementById(`deck-${deckPrefix}`);
+            if (deckEl) {
+                deckEl.classList.remove('loading', 'analyzing');
+            }
+
+            // BPM pulse dot activation
+            const bpm = deck.getBPM();
+            const pulseEl = document.getElementById(`deck-${deckPrefix}-bpm-pulse`);
+            if (pulseEl && bpm) {
+                const interval = 60 / bpm; // seconds per beat
+                pulseEl.style.setProperty('--bpm-interval', `${interval}s`);
+                pulseEl.classList.add('active');
+            } else if (pulseEl) {
+                pulseEl.classList.remove('active');
+            }
+
             // Restore saved cue points
             const trackId = deck.getTrackId();
             if (trackId) {
@@ -199,6 +217,9 @@ class DJPlayer {
 
             // Auto BPM/key detection if metadata is missing
             this._autoDetectBpmKey(deck);
+
+            // Auto-gain: analyze loudness and normalize on load
+            this._autoGainAnalyze(deck);
 
             // Track play count
             if (trackId && this.playlists) this.playlists.incrementPlayCount(trackId);
@@ -239,6 +260,10 @@ class DJPlayer {
         // Only detect if BPM or key is missing
         if (meta.bpm && meta.key) return;
 
+        // Visual polish: show analyzing shimmer
+        const deckEl = document.getElementById(`deck-${deck.id.toLowerCase()}`);
+        if (deckEl) deckEl.classList.add('analyzing');
+
         try {
             const result = await this.bpmDetector.analyze(audioUrl, trackId);
             if (result.bpm && !meta.bpm) {
@@ -247,6 +272,14 @@ class DJPlayer {
                 const bpmEl = document.getElementById(`${prefix}-bpm`);
                 if (bpmEl) bpmEl.textContent = `${result.bpm} BPM`;
                 deck._buildBeatGrid();
+
+                // Visual polish: activate BPM pulse after detection
+                const pulseEl = document.getElementById(`${prefix}-bpm-pulse`);
+                if (pulseEl) {
+                    const interval = 60 / result.bpm;
+                    pulseEl.style.setProperty('--bpm-interval', `${interval}s`);
+                    pulseEl.classList.add('active');
+                }
             }
             if (result.key && !meta.key) {
                 meta.key = result.key;
@@ -257,6 +290,21 @@ class DJPlayer {
             }
         } catch (e) {
             console.warn('Auto BPM/key detection failed:', e);
+        } finally {
+            // Visual polish: remove analyzing shimmer
+            if (deckEl) deckEl.classList.remove('analyzing');
+        }
+    }
+
+    async _autoGainAnalyze(deck) {
+        if (!this.audioRouter.autoGainEnabled) return;
+        const mediaEl = deck.getMediaElement();
+        if (!mediaEl) return;
+
+        try {
+            await this.audioRouter.analyzeAndNormalize(deck.id, mediaEl);
+        } catch (e) {
+            console.warn(`[AUTOGAIN] Analysis failed for Deck ${deck.id}:`, e.message);
         }
     }
 
@@ -304,6 +352,12 @@ class DJPlayer {
                 playIcon.classList.toggle('hidden', deck.isPlaying);
                 pauseIcon.classList.toggle('hidden', !deck.isPlaying);
             }
+        }
+
+        // Visual polish: toggle .playing class on deck container
+        const deckEl = document.getElementById(`deck-${deck.id.toLowerCase()}`);
+        if (deckEl) {
+            deckEl.classList.toggle('playing', deck.isPlaying);
         }
 
         this.broadcast?.updatePlayState(deck.id, deck.isPlaying, currentTime);
@@ -626,28 +680,206 @@ class DJPlayer {
     }
 
     _initKeyboardShortcuts() {
+        // --- Shortcuts overlay toggle ---
+        const shortcutsOverlay = document.getElementById('shortcuts-overlay');
+        const shortcutsBtn = document.getElementById('shortcuts-btn');
+        const shortcutsClose = document.getElementById('shortcuts-close');
+        const shortcutsBackdrop = document.getElementById('shortcuts-backdrop');
+
+        const toggleShortcutsOverlay = () => {
+            if (shortcutsOverlay) shortcutsOverlay.classList.toggle('hidden');
+        };
+        const closeShortcutsOverlay = () => {
+            if (shortcutsOverlay) shortcutsOverlay.classList.add('hidden');
+        };
+
+        if (shortcutsBtn) shortcutsBtn.addEventListener('click', toggleShortcutsOverlay);
+        if (shortcutsClose) shortcutsClose.addEventListener('click', closeShortcutsOverlay);
+        if (shortcutsBackdrop) shortcutsBackdrop.addEventListener('click', closeShortcutsOverlay);
+
+        // --- Visual key-press feedback helper ---
+        const flashButton = (elementId) => {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.classList.remove('key-pressed');
+            // Force reflow so re-adding the class restarts the animation
+            void el.offsetWidth;
+            el.classList.add('key-pressed');
+            el.addEventListener('animationend', () => el.classList.remove('key-pressed'), { once: true });
+        };
+
+        // --- Main keyboard handler ---
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
             this.audioRouter.resume();
 
+            // "?" key (Shift + Slash on US keyboards) or "H" key toggle shortcuts overlay
+            if ((e.key === '?' || e.key === '/') && e.shiftKey) {
+                e.preventDefault();
+                toggleShortcutsOverlay();
+                flashButton('shortcuts-btn');
+                return;
+            }
+
             switch (e.code) {
+                // --- Transport ---
                 case 'Space':
                     e.preventDefault();
-                    (e.shiftKey ? this.decks.B : this.decks.A).playPause();
+                    if (e.shiftKey) {
+                        this.decks.B.playPause();
+                        flashButton('deck-b-play');
+                    } else {
+                        this.decks.A.playPause();
+                        flashButton('deck-a-play');
+                    }
                     break;
-                case 'KeyQ': this.decks.A.cue(); break;
-                case 'KeyW': this.decks.B.cue(); break;
+                case 'KeyQ':
+                    this.decks.A.playPause();
+                    flashButton('deck-a-play');
+                    break;
+                case 'KeyW':
+                    this.decks.B.playPause();
+                    flashButton('deck-b-play');
+                    break;
+                case 'KeyA':
+                    this.decks.A.cue();
+                    flashButton('deck-a-cue');
+                    break;
                 case 'KeyS':
-                    if (e.shiftKey) { const bpm = this.decks.A.getBPM(); if (bpm) this.decks.B.syncTo(bpm); }
-                    else { const bpm = this.decks.B.getBPM(); if (bpm) this.decks.A.syncTo(bpm); }
+                    this.decks.B.cue();
+                    flashButton('deck-b-cue');
                     break;
+                case 'KeyZ':
+                    if (e.ctrlKey || e.metaKey) {
+                        // Ctrl+Z = undo, Ctrl+Shift+Z = redo
+                        if (this.settings) {
+                            e.preventDefault();
+                            if (e.shiftKey) this.settings.redo();
+                            else this.settings.undo();
+                        }
+                    } else {
+                        // Z alone = sync Deck A to Deck B's BPM
+                        const bpmB = this.decks.B.getBPM();
+                        if (bpmB) this.decks.A.syncTo(bpmB);
+                        flashButton('deck-a-sync');
+                    }
+                    break;
+                case 'KeyX': {
+                    // X = sync Deck B to Deck A's BPM
+                    const bpmA = this.decks.A.getBPM();
+                    if (bpmA) this.decks.B.syncTo(bpmA);
+                    flashButton('deck-b-sync');
+                    break;
+                }
+
+                // --- Mixing: crossfader & volume ---
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    this.mixer.nudgeCrossfader(-5);
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    this.mixer.nudgeCrossfader(5);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    this.mixer.nudgeVolume(e.shiftKey ? 'B' : 'A', 5);
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    this.mixer.nudgeVolume(e.shiftKey ? 'B' : 'A', -5);
+                    break;
+
+                // --- Tempo adjust (+/- keys) ---
+                case 'Equal': // "+" / "=" key
+                case 'NumpadAdd': {
+                    e.preventDefault();
+                    const deck = e.shiftKey ? this.decks.B : this.decks.A;
+                    const ch = e.shiftKey ? 'b' : 'a';
+                    const pitchFader = document.getElementById(`pitch-${ch}`);
+                    const pitchDisplay = document.getElementById(`pitch-${ch}-display`);
+                    if (pitchFader) {
+                        const newVal = Math.min(parseFloat(pitchFader.max), parseFloat(pitchFader.value) + 0.5);
+                        pitchFader.value = newVal;
+                        deck.setTempo(newVal);
+                        if (pitchDisplay) pitchDisplay.textContent = `${newVal >= 0 ? '+' : ''}${newVal.toFixed(1)}%`;
+                    }
+                    break;
+                }
+                case 'Minus': // "-" key
+                case 'NumpadSubtract': {
+                    e.preventDefault();
+                    const deck = e.shiftKey ? this.decks.B : this.decks.A;
+                    const ch = e.shiftKey ? 'b' : 'a';
+                    const pitchFader = document.getElementById(`pitch-${ch}`);
+                    const pitchDisplay = document.getElementById(`pitch-${ch}-display`);
+                    if (pitchFader) {
+                        const newVal = Math.max(parseFloat(pitchFader.min), parseFloat(pitchFader.value) - 0.5);
+                        pitchFader.value = newVal;
+                        deck.setTempo(newVal);
+                        if (pitchDisplay) pitchDisplay.textContent = `${newVal >= 0 ? '+' : ''}${newVal.toFixed(1)}%`;
+                    }
+                    break;
+                }
+
+                // --- Hot Cues (1-8) ---
+                case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
+                case 'Digit5': case 'Digit6': case 'Digit7': case 'Digit8': {
+                    const i = parseInt(e.code.replace('Digit', '')) - 1;
+                    const deckId = (e.ctrlKey || e.metaKey || e.shiftKey) ? 'B' : 'A';
+                    this.decks[deckId].triggerHotCue(i);
+                    // Flash the corresponding pad button
+                    const padContainer = document.getElementById(`deck-${deckId.toLowerCase()}-pads`);
+                    if (padContainer) {
+                        const pad = padContainer.querySelector(`[data-pad="${i}"]`);
+                        if (pad) {
+                            pad.classList.remove('key-pressed');
+                            void pad.offsetWidth;
+                            pad.classList.add('key-pressed');
+                            pad.addEventListener('animationend', () => pad.classList.remove('key-pressed'), { once: true });
+                        }
+                    }
+                    break;
+                }
+
+                // --- Loops ---
+                case 'KeyL':
+                    if (e.shiftKey) {
+                        this.decks.B.toggleLoop();
+                        flashButton('loop-b-toggle');
+                    } else {
+                        this.decks.A.toggleLoop();
+                        flashButton('loop-a-toggle');
+                    }
+                    break;
+                case 'BracketLeft':
+                    if (e.shiftKey) {
+                        this.decks.B.setLoopIn();
+                        flashButton('loop-b-in');
+                    } else {
+                        this.decks.A.setLoopIn();
+                        flashButton('loop-a-in');
+                    }
+                    break;
+                case 'BracketRight':
+                    if (e.shiftKey) {
+                        this.decks.B.setLoopOut();
+                        flashButton('loop-b-out');
+                    } else {
+                        this.decks.A.setLoopOut();
+                        flashButton('loop-a-out');
+                    }
+                    break;
+
+                // --- Effects & Recording ---
                 case 'KeyM':
                     if (this.audioRouter.mic.stream) {
                         const muted = this.audioRouter.mic.muted;
                         this.audioRouter.setMicMute(!muted);
                         const micMute = document.getElementById('mic-mute');
                         if (micMute) { micMute.classList.toggle('active', !muted); micMute.textContent = muted ? 'UNMUTE' : 'MUTE'; }
+                        flashButton('mic-mute');
                     }
                     break;
                 case 'KeyR':
@@ -655,39 +887,38 @@ class DJPlayer {
                     if (this.recorder) {
                         if (this.recorder.isRecording) this.recorder.stop();
                         else this.recorder.start();
+                        flashButton('rec-btn');
                     }
                     break;
                 case 'KeyV':
                     if (this.visualizer) {
                         if (this.visualizer.running) this.visualizer.stop();
                         else this.visualizer.start();
+                        flashButton('viz-toggle');
                     }
                     break;
-                case 'KeyL':
-                    if (e.shiftKey) this.decks.B.toggleLoop();
-                    else this.decks.A.toggleLoop();
+
+                // --- Navigation ---
+                case 'KeyF':
+                    if (e.ctrlKey || e.metaKey) return; // don't block browser find
+                    if (this.flowMode) this.flowMode.toggle();
+                    flashButton('flow-toggle-btn');
                     break;
-                case 'BracketLeft':
-                    (e.shiftKey ? this.decks.B : this.decks.A).setLoopIn();
+                case 'KeyH':
+                    toggleShortcutsOverlay();
+                    flashButton('shortcuts-btn');
                     break;
-                case 'BracketRight':
-                    (e.shiftKey ? this.decks.B : this.decks.A).setLoopOut();
+                case 'Escape':
+                    // Close any open panel/overlay
+                    closeShortcutsOverlay();
+                    document.getElementById('settings-panel')?.classList.add('hidden');
+                    document.getElementById('stream-panel')?.classList.add('hidden');
+                    document.getElementById('suggest-panel')?.classList.add('hidden');
+                    document.getElementById('plugins-panel')?.classList.add('hidden');
+                    document.getElementById('chat-panel')?.classList.add('hidden');
                     break;
-                case 'KeyZ':
-                    if ((e.ctrlKey || e.metaKey) && this.settings) {
-                        e.preventDefault();
-                        if (e.shiftKey) this.settings.redo();
-                        else this.settings.undo();
-                    }
-                    break;
-                case 'ArrowLeft': e.preventDefault(); this.mixer.nudgeCrossfader(-5); break;
-                case 'ArrowRight': e.preventDefault(); this.mixer.nudgeCrossfader(5); break;
-                case 'ArrowUp': e.preventDefault(); this.mixer.nudgeVolume(e.shiftKey ? 'B' : 'A', 5); break;
-                case 'ArrowDown': e.preventDefault(); this.mixer.nudgeVolume(e.shiftKey ? 'B' : 'A', -5); break;
-                case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
-                case 'Digit5': case 'Digit6': case 'Digit7': case 'Digit8':
-                    { const i = parseInt(e.code.replace('Digit', '')) - 1; (e.shiftKey ? this.decks.B : this.decks.A).triggerHotCue(i); }
-                    break;
+
+                // --- Undo/Redo (Ctrl+Z already handled above in KeyZ) ---
             }
         });
     }
@@ -893,6 +1124,10 @@ class DJPlayer {
         const deck = this.decks[deckId];
         if (!deck) return;
 
+        // Visual polish: add loading shimmer
+        const deckEl = document.getElementById(`deck-${deckId.toLowerCase()}`);
+        if (deckEl) deckEl.classList.add('loading');
+
         this.audioRouter.resume();
         deck.loadTrack(dataFile);
 
@@ -913,6 +1148,10 @@ class DJPlayer {
         }
         const deck = this.decks[deckId];
         if (!deck) return;
+
+        // Visual polish: add loading shimmer
+        const deckEl = document.getElementById(`deck-${deckId.toLowerCase()}`);
+        if (deckEl) deckEl.classList.add('loading');
 
         this.audioRouter.resume();
         deck.loadDirect(streamUrl, meta);

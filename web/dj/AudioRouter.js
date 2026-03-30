@@ -1,6 +1,6 @@
 // AudioRouter.js — Web Audio API graph for two-deck DJ mixing
-// Routes: Deck Source → EQ (3-band) → Channel Gain → Crossfade Gain → Analyser → Master → Destination
-// Cue bus: Pre-fader tap from each channel → cue gain → headphone output
+// Routes: Deck Source → EQ (3-band) → Channel Gain → Crossfade Gain → Analyser → Master → Limiter → Destination
+// Cue bus: Pre-fader tap from each channel → cue gain → headphone output (split cue: L=cue, R=master)
 // Booth: Master → booth gain → booth output
 // Also: Mic → EQ → Gain → Analyser → Master
 //       System Audio → Gain → Analyser → Master
@@ -10,6 +10,16 @@ export class AudioRouter {
         this.ctx = new AudioContext();
         this.channels = {};
         this._sourceNodes = {};
+
+        // ===== EQ KILL STATE =====
+        this._eqKillState = { A: { high: false, mid: false, low: false }, B: { high: false, mid: false, low: false } };
+        this._eqSavedGain = { A: { high: 0, mid: 0, low: 0 }, B: { high: 0, mid: 0, low: 0 } };
+
+        // ===== FADER CURVE =====
+        this.faderCurve = 'linear'; // 'linear' or 'logarithmic'
+
+        // ===== AUTO-GAIN =====
+        this.autoGainEnabled = false;
 
         ['A', 'B'].forEach(id => {
             // DJ-style filter (low-pass / high-pass sweep)
@@ -39,11 +49,25 @@ export class AudioRouter {
             ch.crossfadeGain.connect(ch.analyser);
         });
 
-        // Master chain
+        // Master chain with limiter
         this.masterGain = this.ctx.createGain();
         this.masterAnalyser = this._createAnalyser();
+
+        // ===== MASTER LIMITER =====
+        this.limiter = this.ctx.createDynamicsCompressor();
+        this.limiter.threshold.value = -3;   // Start limiting at -3 dB
+        this.limiter.knee.value = 0;          // Hard knee for aggressive limiting
+        this.limiter.ratio.value = 20;        // Near-infinite ratio = brick wall
+        this.limiter.attack.value = 0.001;    // 1ms attack — catch transients
+        this.limiter.release.value = 0.05;    // 50ms release — quick recovery
+        this.limiterEnabled = false;
+        this._limiterBypass = this.ctx.createGain(); // bypass path
+
+        // Route: masterGain → masterAnalyser → bypass → destination
+        // When limiter enabled: masterGain → masterAnalyser → limiter → destination
         this.masterGain.connect(this.masterAnalyser);
-        this.masterAnalyser.connect(this.ctx.destination);
+        this._limiterBypass.connect(this.ctx.destination);
+        this.masterAnalyser.connect(this._limiterBypass); // default: bypass (no limiter)
 
         // Both channels → master
         this.channels.A.analyser.connect(this.masterGain);
@@ -72,9 +96,15 @@ export class AudioRouter {
         this.cueGain.connect(this.cueOutput);
         this.cueMasterGain.connect(this.cueOutput);
 
-        // Split cue: uses ChannelMerger to put cue=left, master=right
+        // Split cue: uses ChannelSplitter + ChannelMerger for true L/R split
+        // Cue (mono) → left ear, Master (mono) → right ear
         this.splitMerger = this.ctx.createChannelMerger(2);
-        // Will be connected when split cue is enabled
+        // Mono splitters to take channel 0 from each signal
+        this._cueSplitter = this.ctx.createChannelSplitter(2);
+        this._masterSplitter = this.ctx.createChannelSplitter(2);
+        // Mono gain nodes for clean mono-sum before split
+        this._cueMonoGain = this.ctx.createGain();
+        this._masterMonoGain = this.ctx.createGain();
 
         // Headphone output element (for setSinkId routing)
         this._headphoneAudioEl = null;
@@ -181,21 +211,41 @@ export class AudioRouter {
     setSplitCue(enabled) {
         this.splitCue = enabled;
 
-        // Disconnect current cue output
-        this.cueOutput.disconnect();
-        this.cueGain.disconnect();
-        this.cueMasterGain.disconnect();
+        // Disconnect all cue routing
+        try { this.cueOutput.disconnect(); } catch (e) {}
+        try { this.cueGain.disconnect(); } catch (e) {}
+        try { this.cueMasterGain.disconnect(); } catch (e) {}
+        try { this.splitMerger.disconnect(); } catch (e) {}
+        try { this._cueMonoGain.disconnect(); } catch (e) {}
+        try { this._masterMonoGain.disconnect(); } catch (e) {}
+        try { this._cueSplitter.disconnect(); } catch (e) {}
+        try { this._masterSplitter.disconnect(); } catch (e) {}
 
         if (enabled) {
-            // Split: cue → left channel, master → right channel
-            this.cueGain.connect(this.splitMerger, 0, 0);     // cue → left
-            this.cueMasterGain.connect(this.splitMerger, 0, 1); // master → right
+            // True split cue: left ear = cue (pre-fader), right ear = master
+            // Route cue signal to mono, then to left channel of merger
+            this.cueGain.connect(this._cueMonoGain);
+            this._cueMonoGain.connect(this.splitMerger, 0, 0);     // cue → left ear
+
+            // Route master signal to mono, then to right channel of merger
+            this.cueMasterGain.connect(this._masterMonoGain);
+            this._masterMonoGain.connect(this.splitMerger, 0, 1);  // master → right ear
+
+            // Force cue/master mix to 50/50 in split mode so both are audible
+            this.cueGain.gain.value = 0.8;
+            this.cueMasterGain.gain.value = 0.8;
+
             this.splitMerger.connect(this._headphoneDest);
+            console.log('[AUDIO:ROUTER] Split cue ENABLED — L=Cue, R=Master');
         } else {
-            // Normal: cue + master mixed together
+            // Normal: cue + master mixed together in both ears
             this.cueGain.connect(this.cueOutput);
             this.cueMasterGain.connect(this.cueOutput);
             this.cueOutput.connect(this._headphoneDest);
+
+            // Restore cue mix setting
+            this.setCueMix(this.cueMix);
+            console.log('[AUDIO:ROUTER] Split cue DISABLED — normal stereo mix');
         }
     }
 
@@ -417,11 +467,25 @@ export class AudioRouter {
 
     setEQ(deckId, band, gainDB) {
         const key = `eq${band.charAt(0).toUpperCase() + band.slice(1)}`;
-        this.channels[deckId][key].gain.value = gainDB;
+        // If the band is killed, store the value but don't apply it
+        if (this._eqKillState[deckId]?.[band]) {
+            this._eqSavedGain[deckId][band] = gainDB;
+        } else {
+            this.channels[deckId][key].gain.value = gainDB;
+        }
     }
 
     setChannelVolume(deckId, level) {
-        this.channels[deckId].channelGain.gain.value = level;
+        let gain;
+        if (this.faderCurve === 'logarithmic') {
+            // Logarithmic curve: more natural feel, gradual at low end
+            // Maps 0-1 linear input to logarithmic output
+            gain = level === 0 ? 0 : Math.pow(level, 3); // cubic approximation of log curve
+        } else {
+            // Linear curve: direct 1:1 mapping
+            gain = level;
+        }
+        this.channels[deckId].channelGain.gain.value = gain;
     }
 
     setMasterVolume(level) {
@@ -451,6 +515,139 @@ export class AudioRouter {
             filter.type = 'lowpass';
             filter.frequency.value = 22000;
             filter.Q.value = 0.707;
+        }
+    }
+
+    // ===== EQ KILL SWITCHES =====
+
+    toggleEQKill(deckId, band) {
+        const killed = this._eqKillState[deckId][band];
+        const key = `eq${band.charAt(0).toUpperCase() + band.slice(1)}`;
+        const eqNode = this.channels[deckId][key];
+
+        if (!killed) {
+            // Kill: save current gain, set to -inf (use -96 dB as practical -inf)
+            this._eqSavedGain[deckId][band] = eqNode.gain.value;
+            eqNode.gain.setValueAtTime(-96, this.ctx.currentTime);
+            this._eqKillState[deckId][band] = true;
+            console.log(`[AUDIO:EQ] Deck ${deckId} ${band.toUpperCase()} KILLED`);
+        } else {
+            // Restore saved gain
+            eqNode.gain.setValueAtTime(this._eqSavedGain[deckId][band], this.ctx.currentTime);
+            this._eqKillState[deckId][band] = false;
+            console.log(`[AUDIO:EQ] Deck ${deckId} ${band.toUpperCase()} restored to ${this._eqSavedGain[deckId][band]} dB`);
+        }
+        return this._eqKillState[deckId][band];
+    }
+
+    isEQKilled(deckId, band) {
+        return this._eqKillState[deckId]?.[band] || false;
+    }
+
+    // ===== MASTER LIMITER =====
+
+    setLimiterEnabled(enabled) {
+        this.limiterEnabled = enabled;
+
+        // Disconnect current path from analyser
+        try { this.masterAnalyser.disconnect(); } catch (e) {}
+        try { this._limiterBypass.disconnect(); } catch (e) {}
+        try { this.limiter.disconnect(); } catch (e) {}
+
+        // Re-connect booth and cue master (they tap from masterAnalyser)
+        // Keep those connections stable
+
+        if (enabled) {
+            // masterAnalyser → limiter → destination
+            this.masterAnalyser.connect(this.limiter);
+            this.limiter.connect(this.ctx.destination);
+            console.log('[AUDIO:LIMITER] Master limiter ENABLED (threshold: -3dB, ratio: 20:1)');
+        } else {
+            // masterAnalyser → bypass → destination
+            this.masterAnalyser.connect(this._limiterBypass);
+            this._limiterBypass.connect(this.ctx.destination);
+            console.log('[AUDIO:LIMITER] Master limiter DISABLED');
+        }
+
+        // Re-connect booth output from masterAnalyser
+        try { this.masterAnalyser.connect(this.boothGain); } catch (e) {}
+        // Re-connect cue master gain from masterAnalyser
+        try { this.masterAnalyser.connect(this.cueMasterGain); } catch (e) {}
+    }
+
+    getLimiterReduction() {
+        // Returns current gain reduction in dB (negative value = limiting active)
+        return this.limiter.reduction;
+    }
+
+    // ===== CHANNEL FADER CURVE =====
+
+    setFaderCurve(curve) {
+        this.faderCurve = curve; // 'linear' or 'logarithmic'
+        console.log(`[AUDIO:FADER] Fader curve set to: ${curve}`);
+        // Re-apply current fader positions with new curve
+        ['a', 'b'].forEach(ch => {
+            const fader = document.getElementById(`vol-${ch}`);
+            if (fader) {
+                const deckId = ch.toUpperCase();
+                this.setChannelVolume(deckId, fader.value / 100);
+            }
+        });
+    }
+
+    // ===== AUTO-GAIN =====
+
+    setAutoGain(enabled) {
+        this.autoGainEnabled = enabled;
+        console.log(`[AUDIO:AUTOGAIN] Auto-gain ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    }
+
+    // Analyze loudness of an audio element and set channel gain to normalize
+    async analyzeAndNormalize(deckId, audioElement) {
+        if (!this.autoGainEnabled) return;
+        if (!audioElement || !audioElement.src) return;
+
+        console.log(`[AUDIO:AUTOGAIN] Analyzing loudness for Deck ${deckId}...`);
+
+        try {
+            // Use OfflineAudioContext to analyze a portion of the track
+            const response = await fetch(audioElement.src);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer.slice(0)); // clone buffer
+
+            // Analyze the first 30 seconds (or full track if shorter)
+            const sampleRate = audioBuffer.sampleRate;
+            const analyzeLength = Math.min(audioBuffer.length, sampleRate * 30);
+            const channelData = audioBuffer.getChannelData(0);
+
+            // Calculate RMS loudness
+            let sumSquares = 0;
+            for (let i = 0; i < analyzeLength; i++) {
+                sumSquares += channelData[i] * channelData[i];
+            }
+            const rms = Math.sqrt(sumSquares / analyzeLength);
+            const rmsDB = 20 * Math.log10(Math.max(rms, 1e-10));
+
+            // Target loudness: -14 dB RMS (standard streaming loudness)
+            const targetDB = -14;
+            const gainAdjustDB = targetDB - rmsDB;
+            // Clamp gain adjustment to reasonable range (-12 to +12 dB)
+            const clampedGainDB = Math.max(-12, Math.min(12, gainAdjustDB));
+            const gainLinear = Math.pow(10, clampedGainDB / 20);
+
+            // Apply to channel gain
+            this.channels[deckId].channelGain.gain.setValueAtTime(gainLinear, this.ctx.currentTime);
+
+            // Update the volume fader UI to reflect the new gain
+            const ch = deckId.toLowerCase();
+            const fader = document.getElementById(`vol-${ch}`);
+            if (fader) {
+                fader.value = Math.round(gainLinear * 100);
+            }
+
+            console.log(`[AUDIO:AUTOGAIN] Deck ${deckId}: RMS=${rmsDB.toFixed(1)}dB → gain adjustment: ${clampedGainDB > 0 ? '+' : ''}${clampedGainDB.toFixed(1)}dB (linear: ${gainLinear.toFixed(3)})`);
+        } catch (e) {
+            console.warn(`[AUDIO:AUTOGAIN] Failed to analyze Deck ${deckId}:`, e.message);
         }
     }
 
