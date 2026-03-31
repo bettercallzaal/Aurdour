@@ -343,12 +343,20 @@ class DJPlayer {
     }
 
     _connectDeckAudio(deck) {
-        // Only connect once per deck — createMediaElementSource can only be called
-        // once per <audio> element. WaveSurfer reuses the same element across loads.
-        if (this._audioConnected[deck.id]) return;
-
         const mediaEl = deck.getMediaElement();
         if (!mediaEl) return;
+
+        // WaveSurfer 7 creates a NEW <audio> element on each load().
+        // We must detect this and reconnect the MediaElementSourceNode.
+        const prevEl = this._connectedMediaElements?.[deck.id];
+        if (prevEl && prevEl === mediaEl && this._audioConnected[deck.id]) {
+            // Same element, already connected — skip
+            return;
+        }
+
+        // Track which element we connected
+        if (!this._connectedMediaElements) this._connectedMediaElements = {};
+        this._connectedMediaElements[deck.id] = mediaEl;
 
         try {
             this.audioRouter.connectDeckSource(deck.id, mediaEl);

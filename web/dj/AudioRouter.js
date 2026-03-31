@@ -149,13 +149,20 @@ export class AudioRouter {
     // ===== DECK ROUTING =====
 
     connectDeckSource(deckId, audioElement) {
-        // Guard: createMediaElementSource can only be called once per element
+        // If we already have a source for this deck, check if it's the same element
         if (this._sourceNodes[deckId]) {
-            // Already connected — don't disconnect or recreate
-            return;
+            // Check if this is the same audio element — if so, it's already connected
+            if (this._sourceElements?.[deckId] === audioElement) return;
+            // Different element — disconnect old source
+            try { this._sourceNodes[deckId].disconnect(); } catch (_) {}
+            delete this._sourceNodes[deckId];
         }
+
+        // Create new source for this element
         const source = this.ctx.createMediaElementSource(audioElement);
         this._sourceNodes[deckId] = source;
+        if (!this._sourceElements) this._sourceElements = {};
+        this._sourceElements[deckId] = audioElement;
         source.connect(this.channels[deckId].eqLow);
     }
 
