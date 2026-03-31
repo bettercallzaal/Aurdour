@@ -36,12 +36,14 @@ import { SmartRecommend } from './dj/SmartRecommend.js';
 import { CloudSync } from './dj/CloudSync.js';
 import { PluginManager } from './dj/PluginManager.js';
 import { TravelMode } from './dj/TravelMode.js';
+import { BeatGridOverlay } from './dj/BeatGridOverlay.js';
 
 class DJPlayer {
     constructor() {
         this.audioRouter = new AudioRouter();
         this.decks = {};
         this._audioConnected = { A: false, B: false };
+        this.fourDeckMode = false;
         this.storage = new Storage();
 
         // Core
@@ -134,6 +136,23 @@ class DJPlayer {
         // Travel Mode — touch-optimized mobile/tablet DJ mode
         this.travelMode = safeInit('TravelMode', () => new TravelMode(this));
 
+        // Beat Grid Overlay — visual beat markers, hot cue markers, loop highlights, phase meter
+        this.beatGridOverlay = safeInit('BeatGridOverlay', () => new BeatGridOverlay(this.decks.A, this.decks.B));
+
+        // Wire mixer crossfader to stream broadcast
+        if (this.broadcast && this.mixer) {
+            this.mixer.onCrossfaderChange = (position) => {
+                this.broadcast.updateCrossfaderPosition(position);
+            };
+        }
+
+        // Wire auto-transition state to stream broadcast
+        if (this.broadcast && this.autoTransition) {
+            this.autoTransition.onTransitionStateChange = (active, direction) => {
+                this.broadcast.updateTransitionState(active, direction);
+            };
+        }
+
         // Wire library queue button to setlist
         if (this.setlist) {
             this.library.onAddToQueue = (track) => this.setlist.addToQueue(track);
@@ -145,8 +164,17 @@ class DJPlayer {
             this.library.playlists = this.playlists;
         }
 
+        // Wire bulk action buttons
+        this._initLibraryBulkActions();
+
+        // Wire select-all checkbox
+        this._initLibrarySelectAll();
+
         // Stream chat panel toggle
         this._initStreamPanel();
+
+        // OBS overlay setup popup
+        this._initOBSSetup();
 
         // AI Suggestions toggle
         this._initSuggestPanel();
@@ -231,6 +259,8 @@ class DJPlayer {
             if (this.flowMode?.enabled) {
                 this.flowMode.onTimeUpdate(deck);
             }
+            // Update phase sync label
+            this._updatePhaseSyncLabel();
         };
 
         const onTrackNearEnd = (deck) => {
@@ -288,6 +318,10 @@ class DJPlayer {
                 if (keyEl) keyEl.textContent = result.key;
                 this._updateHarmonicDisplay();
             }
+            // Update setlist entry with newly detected BPM/key
+            if (this.setlist && (result.bpm || result.key)) {
+                this.setlist.updateLastEntryMeta(deck.id, result.bpm || null, result.key || null);
+            }
         } catch (e) {
             console.warn('Auto BPM/key detection failed:', e);
         } finally {
@@ -309,25 +343,21 @@ class DJPlayer {
     }
 
     _connectDeckAudio(deck) {
-        const mediaEl = deck.getMediaElement();
-        if (!mediaEl) {
-            console.error(`[AUDIO:PLAYER] Deck ${deck.id}: No media element found! Cannot connect audio.`);
-            return;
-        }
+        // Only connect once per deck — createMediaElementSource can only be called
+        // once per <audio> element. WaveSurfer reuses the same element across loads.
+        if (this._audioConnected[deck.id]) return;
 
-        console.log(`[AUDIO:PLAYER] Connecting Deck ${deck.id} audio...`);
-        console.log(`[AUDIO:PLAYER]   Media element: <${mediaEl.tagName.toLowerCase()}> src="${mediaEl.src?.substring(0, 60)}..." duration=${mediaEl.duration}`);
-        console.log(`[AUDIO:PLAYER]   Already connected: ${this._audioConnected[deck.id]}`);
+        const mediaEl = deck.getMediaElement();
+        if (!mediaEl) return;
 
         try {
             this.audioRouter.connectDeckSource(deck.id, mediaEl);
             this._audioConnected[deck.id] = true;
-            console.log(`[AUDIO:PLAYER]   Deck ${deck.id} audio connected successfully`);
         } catch (e) {
-            console.warn(`[AUDIO:PLAYER] Deck ${deck.id}: Audio routing issue:`, e.message);
-            if (e.message.includes('already been created')) {
-                console.log(`[AUDIO:PLAYER]   This is OK — the MediaElementSource was already created for this element. Audio should still work.`);
+            if (e.message?.includes('already been created')) {
                 this._audioConnected[deck.id] = true;
+            } else {
+                console.warn(`Deck ${deck.id} audio routing issue:`, e.message);
             }
         }
     }
@@ -364,6 +394,50 @@ class DJPlayer {
 
         // Update travel mode display
         this._updateTravelDisplay(deck);
+    }
+
+    _updatePhaseSyncLabel() {
+        const label = document.getElementById('phase-sync-label');
+        if (!label) return;
+
+        const deckA = this.decks.A;
+        const deckB = this.decks.B;
+        if (!deckA.isLoaded || !deckB.isLoaded) {
+            label.textContent = '--';
+            label.style.color = '';
+            return;
+        }
+
+        const bpmA = deckA.getBPM();
+        const bpmB = deckB.getBPM();
+        if (!bpmA || !bpmB) {
+            label.textContent = '--';
+            label.style.color = '';
+            return;
+        }
+
+        const timeA = deckA.getCurrentTime();
+        const timeB = deckB.getCurrentTime();
+        const beatIntervalA = 60 / (bpmA * (deckA.currentRate || 1));
+        const beatIntervalB = 60 / (bpmB * (deckB.currentRate || 1));
+        const phaseA = (timeA % beatIntervalA) / beatIntervalA;
+        const phaseB = (timeB % beatIntervalB) / beatIntervalB;
+
+        let phaseDiff = phaseA - phaseB;
+        if (phaseDiff > 0.5) phaseDiff -= 1;
+        if (phaseDiff < -0.5) phaseDiff += 1;
+
+        const absDiff = Math.abs(phaseDiff);
+        if (absDiff < 0.05) {
+            label.textContent = 'SYNC';
+            label.style.color = '#00ff88';
+        } else if (absDiff < 0.15) {
+            label.textContent = 'CLOSE';
+            label.style.color = '#ffcc00';
+        } else {
+            label.textContent = 'DRIFT';
+            label.style.color = '#ff4444';
+        }
     }
 
     _updateHarmonicDisplay() {
@@ -651,6 +725,26 @@ class DJPlayer {
             });
         }
 
+        // Beat Grid overlay toggle buttons
+        ['a', 'b'].forEach(ch => {
+            const deckId = ch.toUpperCase();
+            const gridBtn = document.getElementById(`grid-${ch}`);
+            if (gridBtn && this.beatGridOverlay) {
+                gridBtn.addEventListener('click', () => {
+                    const visible = this.beatGridOverlay.toggleGrid(deckId);
+                    gridBtn.classList.toggle('active', visible);
+                });
+            }
+        });
+
+        // 4-Deck mode toggle
+        const fourDeckBtn = document.getElementById('four-deck-toggle');
+        if (fourDeckBtn) {
+            fourDeckBtn.addEventListener('click', () => {
+                this._toggleFourDeckMode();
+            });
+        }
+
         // Chat close
         document.getElementById('chat-close')?.addEventListener('click', () => {
             document.getElementById('chat-panel')?.classList.add('hidden');
@@ -904,6 +998,22 @@ class DJPlayer {
                     if (this.flowMode) this.flowMode.toggle();
                     flashButton('flow-toggle-btn');
                     break;
+                case 'KeyG':
+                    // Toggle beat grid overlay
+                    if (this.beatGridOverlay) {
+                        if (e.shiftKey) {
+                            const vis = this.beatGridOverlay.toggleGrid('B');
+                            const btn = document.getElementById('grid-b');
+                            if (btn) btn.classList.toggle('active', vis);
+                            flashButton('grid-b');
+                        } else {
+                            const vis = this.beatGridOverlay.toggleGrid('A');
+                            const btn = document.getElementById('grid-a');
+                            if (btn) btn.classList.toggle('active', vis);
+                            flashButton('grid-a');
+                        }
+                    }
+                    break;
                 case 'KeyH':
                     toggleShortcutsOverlay();
                     flashButton('shortcuts-btn');
@@ -968,6 +1078,77 @@ class DJPlayer {
                 if (status) { status.textContent = connected ? 'Live' : 'Offline'; status.classList.toggle('connected', connected); }
                 ytBtn.textContent = connected ? 'LEAVE' : 'JOIN';
             };
+        }
+    }
+
+    _initOBSSetup() {
+        const popup = document.getElementById('obs-setup-popup');
+        const openBtn = document.getElementById('obs-setup-btn');
+        const closeBtn = document.getElementById('obs-setup-close');
+        const urlInput = document.getElementById('obs-overlay-url');
+        const copyBtn = document.getElementById('obs-copy-url');
+        const previewBtn = document.getElementById('obs-preview-btn');
+
+        if (!popup || !openBtn) return;
+
+        let selectedTheme = 'full';
+
+        const getOverlayUrl = () => {
+            const base = window.location.href.replace(/\/[^/]*$/, '/obs-overlay.html');
+            return selectedTheme === 'full' ? base : `${base}?theme=${selectedTheme}`;
+        };
+
+        const updateUrl = () => {
+            if (urlInput) urlInput.value = getOverlayUrl();
+        };
+
+        openBtn.addEventListener('click', () => {
+            updateUrl();
+            popup.classList.remove('hidden');
+        });
+
+        if (closeBtn) closeBtn.addEventListener('click', () => popup.classList.add('hidden'));
+
+        // Close on backdrop click
+        popup.addEventListener('click', (e) => {
+            if (e.target === popup) popup.classList.add('hidden');
+        });
+
+        // Theme buttons
+        popup.querySelectorAll('.obs-theme-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                popup.querySelectorAll('.obs-theme-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedTheme = btn.dataset.theme;
+                updateUrl();
+            });
+        });
+
+        // Copy URL
+        if (copyBtn && urlInput) {
+            copyBtn.addEventListener('click', () => {
+                urlInput.select();
+                navigator.clipboard.writeText(urlInput.value).then(() => {
+                    copyBtn.textContent = 'COPIED';
+                    copyBtn.classList.add('copied');
+                    setTimeout(() => {
+                        copyBtn.textContent = 'COPY';
+                        copyBtn.classList.remove('copied');
+                    }, 2000);
+                }).catch(() => {
+                    // Fallback
+                    document.execCommand('copy');
+                    copyBtn.textContent = 'COPIED';
+                    setTimeout(() => { copyBtn.textContent = 'COPY'; }, 2000);
+                });
+            });
+        }
+
+        // Preview in new tab
+        if (previewBtn) {
+            previewBtn.addEventListener('click', () => {
+                window.open(getOverlayUrl(), '_blank', 'width=1920,height=200');
+            });
         }
     }
 
@@ -1133,8 +1314,14 @@ class DJPlayer {
 
         const trackName = dataFile.split('/').pop().replace('.json', '');
 
-        // Log to setlist
-        if (this.setlist) this.setlist.logPlay(trackName, '');
+        // Extract metadata from deck (BPM/key may be populated later by auto-detect)
+        const bpm = deck.getBPM();
+        const key = deck.getKey();
+
+        // Log to setlist with full metadata
+        if (this.setlist) {
+            this.setlist.logPlay(trackName, '', bpm, key, deckId);
+        }
 
         // Log to recorder cue sheet
         if (this.recorder) {
@@ -1156,9 +1343,15 @@ class DJPlayer {
         this.audioRouter.resume();
         deck.loadDirect(streamUrl, meta);
 
-        // Log to setlist
+        // Log to setlist with full metadata
         if (this.setlist) {
-            this.setlist.logPlay(meta.title || 'Unknown', meta.artist || '');
+            this.setlist.logPlay(
+                meta.title || 'Unknown',
+                meta.artist || '',
+                meta.bpm || null,
+                meta.key || null,
+                deckId
+            );
         }
 
         // Log to recorder cue sheet
@@ -1170,6 +1363,54 @@ class DJPlayer {
     _applyPlaylistFilter() {
         // Re-render library with playlist filter applied
         // The library will check playlists.activePlaylist to filter tracks
+    }
+
+    _initLibraryBulkActions() {
+        const queueBtn = document.getElementById('lib-bulk-queue');
+        const playlistBtn = document.getElementById('lib-bulk-playlist');
+        const likeBtn = document.getElementById('lib-bulk-like');
+        const clearBtn = document.getElementById('lib-bulk-clear');
+
+        if (queueBtn) {
+            queueBtn.addEventListener('click', () => this.library.bulkAddToQueue());
+        }
+        if (playlistBtn) {
+            playlistBtn.addEventListener('click', () => this.library.bulkAddToPlaylist());
+        }
+        if (likeBtn) {
+            likeBtn.addEventListener('click', () => this.library.bulkLike());
+        }
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.library.selectedIds.clear();
+                this.library._updateBulkBar();
+                this.library._renderCurrentPage();
+            });
+        }
+    }
+
+    _initLibrarySelectAll() {
+        const selectAllCb = document.getElementById('lib-select-all');
+        if (!selectAllCb) return;
+
+        selectAllCb.addEventListener('change', () => {
+            const tracks = this.library._displayedTracks;
+            const start = (this.library.currentPage - 1) * this.library.pageSize;
+            const end = Math.min(start + this.library.pageSize, tracks.length);
+            const pageSlice = tracks.slice(start, end);
+
+            if (selectAllCb.checked) {
+                pageSlice.forEach(t => {
+                    this.library.selectedIds.add(this.library._getTrackKey(t));
+                });
+            } else {
+                pageSlice.forEach(t => {
+                    this.library.selectedIds.delete(this.library._getTrackKey(t));
+                });
+            }
+            this.library._updateBulkBar();
+            this.library._renderCurrentPage();
+        });
     }
 
     _initCrashRecovery() {

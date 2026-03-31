@@ -1,9 +1,10 @@
-// AudioRouter.js — Web Audio API graph for two-deck DJ mixing
+// AudioRouter.js — Web Audio API graph for DJ mixing (2 or 4 decks)
 // Routes: Deck Source → EQ (3-band) → Channel Gain → Crossfade Gain → Analyser → Master → Limiter → Destination
 // Cue bus: Pre-fader tap from each channel → cue gain → headphone output (split cue: L=cue, R=master)
 // Booth: Master → booth gain → booth output
 // Also: Mic → EQ → Gain → Analyser → Master
 //       System Audio → Gain → Analyser → Master
+// 4-deck: Crossfader assignment — each deck assigned to A-side or B-side
 
 export class AudioRouter {
     constructor() {
@@ -21,35 +22,18 @@ export class AudioRouter {
         // ===== AUTO-GAIN =====
         this.autoGainEnabled = false;
 
+        // ===== 4-DECK MODE =====
+        this.fourDeckMode = false;
+        // Crossfader assignment: which side of crossfader each deck belongs to
+        // Default: A,C = A-side; B,D = B-side
+        this.crossfaderAssignment = { A: 'A', B: 'B', C: 'A', D: 'B' };
+
         ['A', 'B'].forEach(id => {
-            // DJ-style filter (low-pass / high-pass sweep)
-            const filter = this.ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 22000; // fully open
-            filter.Q.value = 0.707;
-
-            this.channels[id] = {
-                eqLow: this._createEQ('lowshelf', 320),
-                eqMid: this._createEQ('peaking', 1000),
-                eqHigh: this._createEQ('highshelf', 3200),
-                filter: filter,
-                channelGain: this.ctx.createGain(),
-                crossfadeGain: this.ctx.createGain(),
-                analyser: this._createAnalyser(),
-                pfl: false, // pre-fader listen
-            };
-
-            // Chain: eqLow → eqMid → eqHigh → filter → channelGain → crossfadeGain → analyser
-            const ch = this.channels[id];
-            ch.eqLow.connect(ch.eqMid);
-            ch.eqMid.connect(ch.eqHigh);
-            ch.eqHigh.connect(ch.filter);
-            ch.filter.connect(ch.channelGain);
-            ch.channelGain.connect(ch.crossfadeGain);
-            ch.crossfadeGain.connect(ch.analyser);
+            this._createChannel(id);
         });
 
         // Master chain with limiter
+        this._lastCrossfadePosition = 0.5;
         this.masterGain = this.ctx.createGain();
         this.masterAnalyser = this._createAnalyser();
 
@@ -165,20 +149,14 @@ export class AudioRouter {
     // ===== DECK ROUTING =====
 
     connectDeckSource(deckId, audioElement) {
-        console.log(`[AUDIO:ROUTER] connectDeckSource(${deckId}) — audioElement:`, audioElement?.tagName, `src="${audioElement?.src?.substring(0, 80)}..." paused=${audioElement?.paused}`);
-        console.log(`[AUDIO:ROUTER]   AudioContext state: ${this.ctx.state} | sampleRate: ${this.ctx.sampleRate}`);
-
+        // Guard: createMediaElementSource can only be called once per element
         if (this._sourceNodes[deckId]) {
-            console.log(`[AUDIO:ROUTER]   Disconnecting previous source for Deck ${deckId}`);
-            try {
-                this._sourceNodes[deckId].disconnect();
-            } catch (e) { /* already disconnected */ }
+            // Already connected — don't disconnect or recreate
+            return;
         }
         const source = this.ctx.createMediaElementSource(audioElement);
         this._sourceNodes[deckId] = source;
         source.connect(this.channels[deckId].eqLow);
-        console.log(`[AUDIO:ROUTER]   Deck ${deckId} audio chain connected: MediaElementSource → EQ Low → EQ Mid → EQ High → ChannelGain → CrossfadeGain → Analyser → MasterGain → Destination`);
-        console.log(`[AUDIO:ROUTER]   Channel gains — channelGain: ${this.channels[deckId].channelGain.gain.value}, crossfadeGain: ${this.channels[deckId].crossfadeGain.gain.value}, masterGain: ${this.masterGain.gain.value}`);
     }
 
     // ===== PFL / CUE =====
@@ -415,6 +393,7 @@ export class AudioRouter {
     // ===== CROSSFADER =====
 
     setCrossfade(position) {
+        this._lastCrossfadePosition = position;
         let gainA, gainB;
 
         switch (this.crossfaderCurve) {
@@ -434,8 +413,13 @@ export class AudioRouter {
                 break;
         }
 
-        this.channels.A.crossfadeGain.gain.value = gainA;
-        this.channels.B.crossfadeGain.gain.value = gainB;
+        // Apply crossfade gain to all active channels based on their assignment
+        const allDecks = this.fourDeckMode ? ['A', 'B', 'C', 'D'] : ['A', 'B'];
+        allDecks.forEach(deckId => {
+            if (!this.channels[deckId]) return;
+            const side = this.crossfaderAssignment[deckId] || (deckId === 'B' || deckId === 'D' ? 'B' : 'A');
+            this.channels[deckId].crossfadeGain.gain.value = (side === 'A') ? gainA : gainB;
+        });
     }
 
     setCrossfaderCurve(curve) {
@@ -443,6 +427,97 @@ export class AudioRouter {
         // Re-apply current crossfader position
         const cf = document.getElementById('crossfader');
         if (cf) this.setCrossfade(cf.value / 100);
+    }
+
+    // ===== 4-DECK MODE =====
+
+    _createChannel(id) {
+        // DJ-style filter (low-pass / high-pass sweep)
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 22000; // fully open
+        filter.Q.value = 0.707;
+
+        this.channels[id] = {
+            eqLow: this._createEQ('lowshelf', 320),
+            eqMid: this._createEQ('peaking', 1000),
+            eqHigh: this._createEQ('highshelf', 3200),
+            filter: filter,
+            channelGain: this.ctx.createGain(),
+            crossfadeGain: this.ctx.createGain(),
+            analyser: this._createAnalyser(),
+            pfl: false, // pre-fader listen
+        };
+
+        // Chain: eqLow → eqMid → eqHigh → filter → channelGain → crossfadeGain → analyser
+        const ch = this.channels[id];
+        ch.eqLow.connect(ch.eqMid);
+        ch.eqMid.connect(ch.eqHigh);
+        ch.eqHigh.connect(ch.filter);
+        ch.filter.connect(ch.channelGain);
+        ch.channelGain.connect(ch.crossfadeGain);
+        ch.crossfadeGain.connect(ch.analyser);
+
+        // EQ kill state for this channel
+        if (!this._eqKillState[id]) {
+            this._eqKillState[id] = { high: false, mid: false, low: false };
+            this._eqSavedGain[id] = { high: 0, mid: 0, low: 0 };
+        }
+
+        // Connect to master if it exists (channels C,D are created later)
+        if (this.masterGain) {
+            ch.analyser.connect(this.masterGain);
+        }
+    }
+
+    enableFourDeckMode() {
+        if (this.fourDeckMode) return;
+        this.fourDeckMode = true;
+
+        // Create channels C and D
+        ['C', 'D'].forEach(id => {
+            if (!this.channels[id]) {
+                this._createChannel(id);
+                this.channels[id].analyser.connect(this.masterGain);
+            }
+        });
+
+        // Re-apply crossfader to pick up new channels
+        this.setCrossfade(this._lastCrossfadePosition);
+        console.log('[AUDIO:ROUTER] 4-deck mode ENABLED — channels C and D created');
+    }
+
+    disableFourDeckMode() {
+        if (!this.fourDeckMode) return;
+        this.fourDeckMode = false;
+
+        // Disconnect and remove channels C and D
+        ['C', 'D'].forEach(id => {
+            if (this.channels[id]) {
+                try { this.channels[id].analyser.disconnect(this.masterGain); } catch (e) {}
+                // Disconnect source if any
+                if (this._sourceNodes[id]) {
+                    try { this._sourceNodes[id].disconnect(); } catch (e) {}
+                    delete this._sourceNodes[id];
+                }
+            }
+        });
+
+        // Re-apply crossfader for 2-deck
+        this.setCrossfade(this._lastCrossfadePosition);
+        console.log('[AUDIO:ROUTER] 4-deck mode DISABLED');
+    }
+
+    setCrossfaderAssignment(deckId, side) {
+        // side: 'A' or 'B'
+        this.crossfaderAssignment[deckId] = side;
+        // Re-apply crossfader gains
+        this.setCrossfade(this._lastCrossfadePosition);
+        console.log(`[AUDIO:ROUTER] Deck ${deckId} assigned to crossfader side ${side}`);
+    }
+
+    getCrossfaderAssignment(deckId) {
+        return this.crossfaderAssignment[deckId] || (deckId === 'B' || deckId === 'D' ? 'B' : 'A');
     }
 
     // ===== COMMON =====
@@ -586,7 +661,8 @@ export class AudioRouter {
         this.faderCurve = curve; // 'linear' or 'logarithmic'
         console.log(`[AUDIO:FADER] Fader curve set to: ${curve}`);
         // Re-apply current fader positions with new curve
-        ['a', 'b'].forEach(ch => {
+        const ids = this.fourDeckMode ? ['a', 'b', 'c', 'd'] : ['a', 'b'];
+        ids.forEach(ch => {
             const fader = document.getElementById(`vol-${ch}`);
             if (fader) {
                 const deckId = ch.toUpperCase();
