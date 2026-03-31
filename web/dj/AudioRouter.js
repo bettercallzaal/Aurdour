@@ -435,7 +435,8 @@ export class AudioRouter {
         // DJ-style filter (low-pass / high-pass sweep)
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 22000; // fully open
+        const nyquist = this.ctx.sampleRate / 2;
+        filter.frequency.value = Math.min(nyquist * 0.95, 22000); // fully open, clamped to Nyquist
         filter.Q.value = 0.707;
 
         this.channels[id] = {
@@ -577,7 +578,8 @@ export class AudioRouter {
             // Low-pass: sweep 200Hz – 22kHz
             filter.type = 'lowpass';
             const normalized = position / 0.48; // 0–1
-            filter.frequency.value = 200 * Math.pow(22000 / 200, normalized);
+            const maxFreq = Math.min(this.ctx.sampleRate / 2 * 0.95, 22000);
+            filter.frequency.value = 200 * Math.pow(maxFreq / 200, normalized);
             filter.Q.value = 0.707 + (1 - normalized) * 4; // resonance peak near cutoff
         } else if (position > 0.52) {
             // High-pass: sweep 20Hz – 8kHz
@@ -588,7 +590,7 @@ export class AudioRouter {
         } else {
             // Center dead zone — bypass (fully open low-pass)
             filter.type = 'lowpass';
-            filter.frequency.value = 22000;
+            filter.frequency.value = Math.min(this.ctx.sampleRate / 2 * 0.95, 22000);
             filter.Q.value = 0.707;
         }
     }

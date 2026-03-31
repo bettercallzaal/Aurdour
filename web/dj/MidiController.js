@@ -2,7 +2,7 @@
 // Built-in Pioneer DDJ Serato mappings + MIDI learn fallback
 
 // ── DEBUG HELPERS ───────────────────────────────────────────────
-const DEBUG = true;
+const DEBUG = false;
 const _debugStyles = {
     midi:   'background:#1a1a2e;color:#00ff88;padding:2px 6px;border-radius:3px;font-weight:bold',
     note:   'background:#2d1b69;color:#e040fb;padding:2px 6px;border-radius:3px',
