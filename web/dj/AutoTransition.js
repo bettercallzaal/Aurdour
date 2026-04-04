@@ -93,6 +93,8 @@ export class AutoTransition {
         this._cleanupEffects();
         const btn = document.getElementById('auto-trans-btn');
         if (btn) { btn.textContent = 'AUTO'; btn.classList.remove('active'); }
+        // Notify broadcast about transition cancel
+        if (this.onTransitionStateChange) this.onTransitionStateChange(false, this.direction);
     }
 
     _startTransition() {
@@ -108,6 +110,9 @@ export class AutoTransition {
 
         const btn = document.getElementById('auto-trans-btn');
         if (btn) { btn.textContent = 'CANCEL'; btn.classList.add('active'); }
+
+        // Notify broadcast about transition start
+        if (this.onTransitionStateChange) this.onTransitionStateChange(true, this.direction);
 
         this._animate();
     }
@@ -422,6 +427,9 @@ export class AutoTransition {
         this._sourceBPM = null;
         this._targetBPM = null;
         this._originalTargetRate = null;
+
+        // Notify broadcast about transition end
+        if (this.onTransitionStateChange) this.onTransitionStateChange(false, this.direction);
 
         if (this.onComplete) this.onComplete(this.direction);
     }

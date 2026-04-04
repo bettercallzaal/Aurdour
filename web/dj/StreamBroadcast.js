@@ -58,6 +58,56 @@ export class StreamBroadcast {
         });
     }
 
+    // Broadcast crossfader position (0..1, where 0 = full A, 1 = full B)
+    updateCrossfaderPosition(position) {
+        this._broadcast({
+            type: 'crossfader_position',
+            position,
+        });
+    }
+
+    // Broadcast transition state (active auto-crossfade in progress)
+    updateTransitionState(active, direction) {
+        this._broadcast({
+            type: 'transition_state',
+            active,
+            direction: direction || null,
+        });
+    }
+
+    // Send full state snapshot to newly connected overlays
+    _sendFullState() {
+        // Re-send current track info for both decks
+        for (const deckId of ['A', 'B']) {
+            const info = this.currentTrackInfo[deckId];
+            if (info) {
+                try {
+                    this.channel.postMessage({
+                        type: 'track_update',
+                        deck: deckId,
+                        metadata: info?.metadata || null,
+                    });
+                } catch (e) { /* ignore */ }
+            }
+        }
+
+        // Re-send crossfader position
+        const cf = document.getElementById('crossfader');
+        if (cf) {
+            try {
+                this.channel.postMessage({
+                    type: 'crossfader_position',
+                    position: parseInt(cf.value) / 100,
+                });
+            } catch (e) { /* ignore */ }
+        }
+
+        // Re-send live status
+        try {
+            this.channel.postMessage({ type: 'live_status', isLive: this.isLive });
+        } catch (e) { /* ignore */ }
+    }
+
     _broadcast(data) {
         if (!this.isLive) return;
         try {
@@ -77,6 +127,10 @@ export class StreamBroadcast {
                 break;
             case 'chat':
                 this._showChatMessage(data.user, data.message);
+                break;
+            case 'obs_overlay_connect':
+                // New OBS overlay connected — send it the current state
+                this._sendFullState();
                 break;
         }
     }

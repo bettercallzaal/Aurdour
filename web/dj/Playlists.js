@@ -1,17 +1,21 @@
 // Playlists.js — Crates, playlists, smart playlists, ratings, play counts
+// Enhanced with full track object storage, reorder, and Library tab integration
 
 export class Playlists {
     constructor(storage) {
         this.storage = storage;
         this.playlists = this.storage.get('playlists', []);
-        this.ratings = this.storage.get('ratings', {}); // trackId → 1-5
+        this.ratings = this.storage.get('ratings', {}); // trackId -> 1-5
         this.playCounts = this.storage.get('playCounts', {});
         this.recentlyPlayed = this.storage.get('recentlyPlayed', []);
         this.likedTracks = this.storage.get('likedTracks', []); // array of track objects
+        // Store full track objects per playlist for richer display
+        this.playlistTrackData = this.storage.get('playlistTrackData', {}); // playlistId -> [track objects]
         this.activePlaylist = null;
         this.onFilterChange = null; // callback to re-render library
 
         this._initUI();
+        this._migratePlaylistData();
     }
 
     _initUI() {
@@ -26,20 +30,33 @@ export class Playlists {
         }
     }
 
+    // Migrate old playlists that stored only track IDs to the new format
+    _migratePlaylistData() {
+        this.playlists.forEach(pl => {
+            if (!this.playlistTrackData[pl.id]) {
+                this.playlistTrackData[pl.id] = [];
+            }
+        });
+    }
+
     // ===== Playlists (Crates) =====
 
     createPlaylist(name) {
         const id = Date.now().toString();
         this.playlists.push({ id, name, tracks: [] });
+        this.playlistTrackData[id] = [];
         this._save('playlists');
+        this._save('playlistTrackData');
         this._renderPlaylistList();
         return id;
     }
 
     deletePlaylist(id) {
         this.playlists = this.playlists.filter(p => p.id !== id);
+        delete this.playlistTrackData[id];
         if (this.activePlaylist === id) this.activePlaylist = null;
         this._save('playlists');
+        this._save('playlistTrackData');
         this._renderPlaylistList();
     }
 
@@ -48,6 +65,42 @@ export class Playlists {
         if (p) { p.name = newName; this._save('playlists'); this._renderPlaylistList(); }
     }
 
+    getPlaylists() {
+        return [...this.playlists];
+    }
+
+    // Add a full track object to a playlist
+    addTrackToPlaylist(playlistId, track) {
+        const p = this.playlists.find(p => p.id === playlistId);
+        if (!p) return;
+
+        const trackKey = this._getTrackKey(track);
+        if (!p.tracks.includes(trackKey)) {
+            p.tracks.push(trackKey);
+            if (!this.playlistTrackData[playlistId]) {
+                this.playlistTrackData[playlistId] = [];
+            }
+            // Store a copy of track data (not the full object with circular refs)
+            this.playlistTrackData[playlistId].push({
+                id: track.id,
+                title: track.title,
+                artist: track.artist,
+                bpm: track.bpm,
+                key: track.key,
+                duration: track.duration,
+                genre: track.genre,
+                artwork: track.artwork,
+                source: track.source,
+                sourceId: track.sourceId,
+                streamUrl: track.streamUrl,
+                dataFile: track.dataFile,
+            });
+            this._save('playlists');
+            this._save('playlistTrackData');
+        }
+    }
+
+    // Legacy addToPlaylist (by track ID string)
     addToPlaylist(playlistId, trackId) {
         const p = this.playlists.find(p => p.id === playlistId);
         if (p && !p.tracks.includes(trackId)) {
@@ -64,9 +117,51 @@ export class Playlists {
         }
     }
 
+    removeTrackFromPlaylist(playlistId, trackKey) {
+        const p = this.playlists.find(p => p.id === playlistId);
+        if (!p) return;
+
+        const idx = p.tracks.indexOf(trackKey);
+        if (idx >= 0) {
+            p.tracks.splice(idx, 1);
+        }
+        if (this.playlistTrackData[playlistId]) {
+            this.playlistTrackData[playlistId] = this.playlistTrackData[playlistId].filter(t => {
+                return this._getTrackKey(t) !== trackKey;
+            });
+        }
+        this._save('playlists');
+        this._save('playlistTrackData');
+    }
+
+    reorderPlaylistTrack(playlistId, fromIndex, toIndex) {
+        const data = this.playlistTrackData[playlistId];
+        const p = this.playlists.find(p => p.id === playlistId);
+        if (!data || !p) return;
+
+        if (fromIndex < 0 || fromIndex >= data.length || toIndex < 0 || toIndex >= data.length) return;
+
+        // Reorder track data
+        const [movedTrack] = data.splice(fromIndex, 1);
+        data.splice(toIndex, 0, movedTrack);
+
+        // Reorder track IDs
+        if (fromIndex < p.tracks.length && toIndex < p.tracks.length) {
+            const [movedId] = p.tracks.splice(fromIndex, 1);
+            p.tracks.splice(toIndex, 0, movedId);
+        }
+
+        this._save('playlists');
+        this._save('playlistTrackData');
+    }
+
     getPlaylistTracks(playlistId) {
         const p = this.playlists.find(p => p.id === playlistId);
         return p ? p.tracks : [];
+    }
+
+    getPlaylistTrackObjects(playlistId) {
+        return this.playlistTrackData[playlistId] || [];
     }
 
     setActivePlaylist(id) {
@@ -130,7 +225,7 @@ export class Playlists {
             .map(t => {
                 let score = 0;
 
-                // BPM compatibility (within ±5%)
+                // BPM compatibility (within +/-5%)
                 if (currentTrack.bpm && t.bpm) {
                     const bpmRatio = t.bpm / currentTrack.bpm;
                     if (bpmRatio >= 0.95 && bpmRatio <= 1.05) score += 3;
@@ -156,10 +251,8 @@ export class Playlists {
     // ===== Liked Tracks =====
 
     toggleLike(track) {
-        const trackKey = track.source === 'audius' ? `audius:${track.id}` : (track.dataFile || track.id);
-        const idx = this.likedTracks.findIndex(t =>
-            (t.source === 'audius' ? `audius:${t.id}` : (t.dataFile || t.id)) === trackKey
-        );
+        const trackKey = this._getTrackKey(track);
+        const idx = this.likedTracks.findIndex(t => this._getTrackKey(t) === trackKey);
         if (idx >= 0) {
             this.likedTracks.splice(idx, 1);
         } else {
@@ -170,14 +263,19 @@ export class Playlists {
     }
 
     isLiked(track) {
-        const trackKey = track.source === 'audius' ? `audius:${track.id}` : (track.dataFile || track.id);
-        return this.likedTracks.some(t =>
-            (t.source === 'audius' ? `audius:${t.id}` : (t.dataFile || t.id)) === trackKey
-        );
+        const trackKey = this._getTrackKey(track);
+        return this.likedTracks.some(t => this._getTrackKey(t) === trackKey);
     }
 
     getLikedTracks() {
         return [...this.likedTracks];
+    }
+
+    _getTrackKey(track) {
+        if (track.source === 'audius') return `audius:${track.id}`;
+        if (track.source === 'soundcloud') return `soundcloud:${track.id}`;
+        if (track.source === 'spotify') return `spotify:${track.id}`;
+        return track.dataFile || track.id || track.title;
     }
 
     _save(key) {

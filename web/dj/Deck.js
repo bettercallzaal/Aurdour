@@ -41,9 +41,13 @@ export class Deck {
     }
 
     _initWaveSurfer(waveformId, overviewId) {
-        const colors = this.id === 'A'
-            ? { wave: ['#003388', '#0066ff', '#00d4ff'], progress: ['#004499', '#0088ff', '#44eeff'] }
-            : { wave: ['#882200', '#ff3300', '#ff6b35'], progress: ['#993300', '#ff4400', '#ff8844'] };
+        const colorMap = {
+            A: { wave: ['#003388', '#0066ff', '#00d4ff'], progress: ['#004499', '#0088ff', '#44eeff'] },
+            B: { wave: ['#882200', '#ff3300', '#ff6b35'], progress: ['#993300', '#ff4400', '#ff8844'] },
+            C: { wave: ['#005533', '#00bb55', '#00ff88'], progress: ['#006644', '#00cc66', '#44ffaa'] },
+            D: { wave: ['#552288', '#8844cc', '#bb66ff'], progress: ['#663399', '#9955dd', '#cc88ff'] },
+        };
+        const colors = colorMap[this.id] || colorMap.A;
 
         const ctx = document.createElement('canvas').getContext('2d');
         const waveGradient = ctx.createLinearGradient(0, 0, 0, 100);
@@ -330,7 +334,8 @@ export class Deck {
             this.loop.region.remove();
         }
 
-        const color = this.id === 'A' ? 'rgba(0, 212, 255, 0.15)' : 'rgba(255, 107, 53, 0.15)';
+        const loopColors = { A: 'rgba(0, 212, 255, 0.15)', B: 'rgba(255, 107, 53, 0.15)', C: 'rgba(0, 255, 136, 0.15)', D: 'rgba(187, 102, 255, 0.15)' };
+        const color = loopColors[this.id] || loopColors.A;
         this.loop.region = this.regionsPlugin.addRegion({
             start: this.loop.inPoint,
             end: this.loop.outPoint,
