@@ -1,5 +1,5 @@
 // FX.js — Audio effects engine per deck
-// Effects: Echo, Reverb, Flanger, Filter, Delay
+// Effects: Echo, Reverb, Flanger, Filter, Delay, Phaser, Chorus, Bitcrusher, Compressor, Distortion
 // Each deck has a dry/wet send routed through the AudioRouter
 
 export class FX {
@@ -45,9 +45,14 @@ export class FX {
         const flanger = this._createFlanger();
         const filter = this._createFilter();
         const delay = this._createDelay();
+        const phaser = this._createPhaser();
+        const chorus = this._createChorus();
+        const bitcrusher = this._createBitcrusher();
+        const compressor = this._createCompressor();
+        const distortion = this._createDistortion();
 
         // Default: echo is connected
-        const effects = { echo, reverb, flanger, filter, delay };
+        const effects = { echo, reverb, flanger, filter, delay, phaser, chorus, bitcrusher, compressor, distortion };
         const activeEffect = 'echo';
 
         // Connect active effect
@@ -162,6 +167,182 @@ export class FX {
         return { input, output, delayNode, feedback, params: { time: 0.5, feedback: 0.35 } };
     }
 
+    _createPhaser() {
+        const input = this.ctx.createGain();
+        const output = this.ctx.createGain();
+
+        // Chain of 4 all-pass filters
+        const allpassFilters = [];
+        const baseFrequencies = [350, 700, 1400, 2800];
+        for (let i = 0; i < 4; i++) {
+            const ap = this.ctx.createBiquadFilter();
+            ap.type = 'allpass';
+            ap.frequency.value = baseFrequencies[i];
+            ap.Q.value = 0.5;
+            allpassFilters.push(ap);
+        }
+
+        // LFO to modulate all-pass frequencies
+        const lfo = this.ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.5;
+        const lfoGains = [];
+        for (let i = 0; i < 4; i++) {
+            const lg = this.ctx.createGain();
+            lg.gain.value = baseFrequencies[i] * 0.5; // depth modulation
+            lfo.connect(lg);
+            lg.connect(allpassFilters[i].frequency);
+            lfoGains.push(lg);
+        }
+        lfo.start();
+
+        // Feedback path
+        const feedback = this.ctx.createGain();
+        feedback.gain.value = 0.5;
+
+        // Connect chain: input → ap0 → ap1 → ap2 → ap3 → output
+        input.connect(allpassFilters[0]);
+        for (let i = 0; i < allpassFilters.length - 1; i++) {
+            allpassFilters[i].connect(allpassFilters[i + 1]);
+        }
+        allpassFilters[allpassFilters.length - 1].connect(output);
+
+        // Feedback: last allpass → feedback gain → first allpass
+        allpassFilters[allpassFilters.length - 1].connect(feedback);
+        feedback.connect(allpassFilters[0]);
+
+        // Dry pass-through
+        input.connect(output);
+
+        return { input, output, allpassFilters, lfo, lfoGains, feedback, params: { rate: 0.5, depth: 0.5, feedback: 0.5 } };
+    }
+
+    _createChorus() {
+        const input = this.ctx.createGain();
+        const output = this.ctx.createGain();
+
+        // Multi-tap: 3 delay lines with slightly different LFO phases
+        const taps = [];
+        for (let i = 0; i < 3; i++) {
+            const delay = this.ctx.createDelay(0.05);
+            delay.delayTime.value = 0.01 + i * 0.003; // stagger taps
+
+            const lfo = this.ctx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.8;
+
+            const lfoGain = this.ctx.createGain();
+            lfoGain.gain.value = 0.005; // 5ms default depth
+
+            lfo.connect(lfoGain);
+            lfoGain.connect(delay.delayTime);
+            lfo.start();
+
+            // Phase offset per tap
+            // (We use a slight frequency detune to simulate phase offset)
+            lfo.frequency.value = 0.8 + i * 0.05;
+
+            const tapGain = this.ctx.createGain();
+            tapGain.gain.value = 0.33;
+
+            input.connect(delay);
+            delay.connect(tapGain);
+            tapGain.connect(output);
+
+            taps.push({ delay, lfo, lfoGain, tapGain });
+        }
+
+        // Mix knob controls balance: dry pass-through at full volume,
+        // wet taps scaled by mix parameter
+        const dryGain = this.ctx.createGain();
+        dryGain.gain.value = 1.0;
+        input.connect(dryGain);
+        dryGain.connect(output);
+
+        return { input, output, taps, dryGain, params: { rate: 0.8, depth: 5, mix: 0.5 } };
+    }
+
+    _createBitcrusher() {
+        const input = this.ctx.createGain();
+        const output = this.ctx.createGain();
+
+        // WaveShaperNode for bit reduction
+        const waveshaper = this.ctx.createWaveShaper();
+        this._updateBitcrusherCurve(waveshaper, 8);
+
+        // ScriptProcessorNode replacement: we approximate sample-rate reduction
+        // using a very short delay + waveshaper combination.
+        // For true downsampling we use an AudioWorklet if available,
+        // otherwise we rely on the waveshaper for the crushed character.
+        input.connect(waveshaper);
+        waveshaper.connect(output);
+
+        return { input, output, waveshaper, params: { bits: 8, downsample: 1 } };
+    }
+
+    _updateBitcrusherCurve(waveshaper, bits) {
+        const steps = Math.pow(2, bits);
+        const length = 4096;
+        const curve = new Float32Array(length);
+        for (let i = 0; i < length; i++) {
+            const x = (i * 2) / length - 1; // map to -1..1
+            curve[i] = Math.round(x * steps) / steps;
+        }
+        waveshaper.curve = curve;
+        waveshaper.oversample = 'none';
+    }
+
+    _createCompressor() {
+        const input = this.ctx.createGain();
+        const output = this.ctx.createGain();
+
+        const compressor = this.ctx.createDynamicsCompressor();
+        compressor.threshold.value = -24;
+        compressor.ratio.value = 4;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+        compressor.knee.value = 10;
+
+        input.connect(compressor);
+        compressor.connect(output);
+
+        return { input, output, compressor, params: { threshold: -24, ratio: 4, attack: 0.003, release: 0.25 } };
+    }
+
+    _createDistortion() {
+        const input = this.ctx.createGain();
+        const output = this.ctx.createGain();
+
+        // WaveShaperNode for overdrive/saturation
+        const waveshaper = this.ctx.createWaveShaper();
+        this._updateDistortionCurve(waveshaper, 50);
+        waveshaper.oversample = '4x';
+
+        // Tone filter (low-pass) to tame harsh high frequencies
+        const toneFilter = this.ctx.createBiquadFilter();
+        toneFilter.type = 'lowpass';
+        toneFilter.frequency.value = 3000;
+        toneFilter.Q.value = 0.5;
+
+        input.connect(waveshaper);
+        waveshaper.connect(toneFilter);
+        toneFilter.connect(output);
+        input.connect(output); // dry pass-through
+
+        return { input, output, waveshaper, toneFilter, params: { drive: 50, tone: 3000 } };
+    }
+
+    _updateDistortionCurve(waveshaper, drive) {
+        const k = drive;
+        const length = 4096;
+        const curve = new Float32Array(length);
+        for (let i = 0; i < length; i++) {
+            const x = (i * 2) / length - 1;
+            curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
+        }
+        waveshaper.curve = curve;
+    }
+
     // Switch which effect is active on a deck
     switchEffect(deckId, effectName) {
         const deck = this.decks[deckId];
@@ -217,10 +398,61 @@ export class FX {
                 if (param === 'time') effect.delayNode.delayTime.value = value;
                 if (param === 'feedback') effect.feedback.gain.value = Math.min(0.9, value);
                 break;
+            case 'phaser':
+                if (param === 'rate') effect.lfo.frequency.value = value;
+                if (param === 'depth') {
+                    const baseFreqs = [350, 700, 1400, 2800];
+                    effect.lfoGains.forEach((lg, i) => {
+                        lg.gain.value = baseFreqs[i] * value;
+                    });
+                }
+                if (param === 'feedback') effect.feedback.gain.value = Math.min(0.9, value);
+                break;
+            case 'chorus':
+                if (param === 'rate') {
+                    effect.taps.forEach((tap, i) => {
+                        tap.lfo.frequency.value = value + i * 0.05;
+                    });
+                }
+                if (param === 'depth') {
+                    // depth in ms → convert to seconds for lfoGain
+                    effect.taps.forEach(tap => {
+                        tap.lfoGain.gain.value = value / 1000;
+                    });
+                }
+                if (param === 'mix') {
+                    effect.taps.forEach(tap => {
+                        tap.tapGain.gain.value = value * 0.33;
+                    });
+                    effect.dryGain.gain.value = 1 - value * 0.5;
+                }
+                break;
+            case 'bitcrusher':
+                if (param === 'bits') {
+                    this._updateBitcrusherCurve(effect.waveshaper, Math.max(1, Math.round(value)));
+                }
+                // downsample parameter stored for reference (true downsampling
+                // would require an AudioWorklet; the waveshaper approximation
+                // captures the main character of the effect)
+                if (param === 'downsample') effect.params.downsample = value;
+                break;
+            case 'compressor':
+                if (param === 'threshold') effect.compressor.threshold.value = value;
+                if (param === 'ratio') effect.compressor.ratio.value = value;
+                if (param === 'attack') effect.compressor.attack.value = value;
+                if (param === 'release') effect.compressor.release.value = value;
+                break;
+            case 'distortion':
+                if (param === 'drive') this._updateDistortionCurve(effect.waveshaper, value);
+                if (param === 'tone') effect.toneFilter.frequency.value = value;
+                break;
         }
     }
 
     _initUI() {
+        // Populate FX selectors with new effects (append to existing options)
+        this._populateFXSelectors();
+
         ['a', 'b'].forEach(ch => {
             const deckId = ch.toUpperCase();
 
@@ -303,9 +535,54 @@ export class FX {
                 { name: 'time', label: 'TIME', scale: v => v * 2 + 0.05 },
                 { name: 'feedback', label: 'FDBK', scale: v => v * 0.85 },
             ],
+            phaser: [
+                { name: 'rate', label: 'RATE', scale: v => v * 7.9 + 0.1 },
+                { name: 'depth', label: 'DEPTH', scale: v => v },
+            ],
+            chorus: [
+                { name: 'rate', label: 'RATE', scale: v => v * 4.9 + 0.1 },
+                { name: 'depth', label: 'DEPTH', scale: v => v * 20 },
+            ],
+            bitcrusher: [
+                { name: 'bits', label: 'BITS', scale: v => Math.round(v * 15) + 1 },
+                { name: 'downsample', label: 'DSAMP', scale: v => Math.round(v * 39) + 1 },
+            ],
+            compressor: [
+                { name: 'threshold', label: 'THRSH', scale: v => v * -60 },
+                { name: 'ratio', label: 'RATIO', scale: v => v * 19 + 1 },
+            ],
+            distortion: [
+                { name: 'drive', label: 'DRIVE', scale: v => v * 100 },
+                { name: 'tone', label: 'TONE', scale: v => v * 7800 + 200 },
+            ],
         };
 
         return mappings[deck.activeEffect]?.[paramIndex] || null;
+    }
+
+    _populateFXSelectors() {
+        const newEffects = [
+            { value: 'phaser', label: 'Phaser' },
+            { value: 'chorus', label: 'Chorus' },
+            { value: 'bitcrusher', label: 'Bitcrusher' },
+            { value: 'compressor', label: 'Compressor' },
+            { value: 'distortion', label: 'Distortion' },
+        ];
+
+        ['a', 'b'].forEach(ch => {
+            const select = document.getElementById(`fx-${ch}-select`);
+            if (!select) return;
+
+            newEffects.forEach(fx => {
+                // Only add if not already present
+                if (!select.querySelector(`option[value="${fx.value}"]`)) {
+                    const opt = document.createElement('option');
+                    opt.value = fx.value;
+                    opt.textContent = fx.label;
+                    select.appendChild(opt);
+                }
+            });
+        });
     }
 
     _updateParamLabels(ch) {

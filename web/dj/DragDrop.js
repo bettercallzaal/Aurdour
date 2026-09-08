@@ -119,8 +119,15 @@ export class DragDrop {
         console.log(`[AUDIO:LOAD]   File: "${file.name}" | Size: ${(file.size / 1024 / 1024).toFixed(2)}MB | Type: ${file.type}`);
         console.log(`[AUDIO:LOAD]   AudioContext state: ${this.router.ctx.state} | Sample rate: ${this.router.ctx.sampleRate}Hz`);
 
+        // Revoke previous blob URL for this deck to prevent memory leak
+        if (!this._blobUrls) this._blobUrls = {};
+        if (this._blobUrls[deckId]) {
+            URL.revokeObjectURL(this._blobUrls[deckId]);
+        }
+
         // Create a blob URL for the audio file
         const audioUrl = URL.createObjectURL(file);
+        this._blobUrls[deckId] = audioUrl;
         console.log(`[AUDIO:LOAD]   Blob URL: ${audioUrl}`);
 
         // Extract filename-based metadata

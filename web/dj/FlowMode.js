@@ -398,59 +398,98 @@ export class FlowMode {
         const container = document.getElementById('flow-up-next');
         if (!container) return;
 
+        container.textContent = '';
+
         if (this.queue.length === 0) {
-            container.innerHTML = '<div class="flow-empty-msg">Add tracks to queue below</div>';
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'flow-empty-msg';
+            emptyMsg.textContent = 'Add tracks to queue below';
+            container.appendChild(emptyMsg);
             return;
         }
 
         const track = this.queue[0];
         const badges = this._getCompatibilityBadges(track);
-        const badgeHtml = badges.map(b =>
-            `<span class="flow-badge flow-badge-${b.type}">${b.label}</span>`
-        ).join('');
 
-        container.innerHTML = `
-            <div class="flow-next-card">
-                <div class="flow-next-info">
-                    <div class="flow-next-title">${track.title || 'Unknown'}</div>
-                    <div class="flow-next-artist">${track.artist || ''}</div>
-                </div>
-                <div class="flow-next-meta">
-                    <span>${track.bpm ? track.bpm + ' BPM' : ''}</span>
-                    <span>${track.key || ''}</span>
-                </div>
-                <div class="flow-next-badges">${badgeHtml}</div>
-            </div>
-        `;
+        const card = document.createElement('div');
+        card.className = 'flow-next-card';
+
+        const info = document.createElement('div');
+        info.className = 'flow-next-info';
+        const titleEl = document.createElement('div');
+        titleEl.className = 'flow-next-title';
+        titleEl.textContent = track.title || 'Unknown';
+        const artistEl = document.createElement('div');
+        artistEl.className = 'flow-next-artist';
+        artistEl.textContent = track.artist || '';
+        info.appendChild(titleEl);
+        info.appendChild(artistEl);
+
+        const meta = document.createElement('div');
+        meta.className = 'flow-next-meta';
+        const bpmSpan = document.createElement('span');
+        bpmSpan.textContent = track.bpm ? track.bpm + ' BPM' : '';
+        const keySpan = document.createElement('span');
+        keySpan.textContent = track.key || '';
+        meta.appendChild(bpmSpan);
+        meta.appendChild(keySpan);
+
+        const badgesEl = document.createElement('div');
+        badgesEl.className = 'flow-next-badges';
+        for (const b of badges) {
+            const badge = document.createElement('span');
+            badge.className = `flow-badge flow-badge-${b.type}`;
+            badge.textContent = b.label;
+            badgesEl.appendChild(badge);
+        }
+
+        card.appendChild(info);
+        card.appendChild(meta);
+        card.appendChild(badgesEl);
+        container.appendChild(card);
     }
 
     _renderQueue() {
         const container = document.getElementById('flow-queue');
         if (!container) return;
 
+        container.textContent = '';
+
         if (this.queue.length <= 1) {
-            container.innerHTML = '<div class="flow-empty-msg">Queue is empty</div>';
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'flow-empty-msg';
+            emptyMsg.textContent = 'Queue is empty';
+            container.appendChild(emptyMsg);
             return;
         }
 
         // Skip first item (shown in Up Next)
-        container.innerHTML = this.queue.slice(1).map((track, i) => {
+        this.queue.slice(1).forEach((track, i) => {
             const actualIndex = i + 1;
-            return `
-                <div class="flow-queue-item">
-                    <span class="flow-queue-num">${actualIndex + 1}</span>
-                    <span class="flow-queue-info">${track.title || 'Unknown'} — ${track.artist || ''}</span>
-                    <button class="flow-queue-remove" data-index="${actualIndex}">x</button>
-                </div>
-            `;
-        }).join('');
 
-        // Wire remove buttons
-        container.querySelectorAll('.flow-queue-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                this.removeFromQueue(idx);
+            const item = document.createElement('div');
+            item.className = 'flow-queue-item';
+
+            const numSpan = document.createElement('span');
+            numSpan.className = 'flow-queue-num';
+            numSpan.textContent = actualIndex + 1;
+
+            const infoSpan = document.createElement('span');
+            infoSpan.className = 'flow-queue-info';
+            infoSpan.textContent = `${track.title || 'Unknown'} \u2014 ${track.artist || ''}`;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'flow-queue-remove';
+            removeBtn.dataset.index = actualIndex;
+            removeBtn.textContent = 'x';
+            removeBtn.addEventListener('click', () => {
+                this.removeFromQueue(actualIndex);
             });
+
+            item.appendChild(numSpan);
+            item.appendChild(infoSpan);
+            item.appendChild(removeBtn);
+            container.appendChild(item);
         });
     }
 
@@ -469,44 +508,56 @@ export class FlowMode {
             }).slice(0, 10);
         }
 
+        container.textContent = '';
+
         if (items.length === 0) {
-            container.innerHTML = '<div class="flow-empty-msg">No more suggestions available</div>';
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'flow-empty-msg';
+            emptyMsg.textContent = 'No more suggestions available';
+            container.appendChild(emptyMsg);
             return;
         }
 
-        container.innerHTML = items.map((track, i) => {
+        items.forEach((track, i) => {
             const badges = this._getCompatibilityBadges(track);
-            const badgeHtml = badges.map(b =>
-                `<span class="flow-badge flow-badge-${b.type}">${b.label}</span>`
-            ).join('');
 
-            return `
-                <div class="flow-suggestion-card" data-index="${i}">
-                    <div class="flow-sug-info">
-                        <div class="flow-sug-title">${track.title || 'Unknown'}</div>
-                        <div class="flow-sug-artist">${track.artist || ''}</div>
-                    </div>
-                    <div class="flow-sug-meta">
-                        <span>${track.bpm ? track.bpm + ' BPM' : ''}</span>
-                        <span>${track.key || ''}</span>
-                        ${badgeHtml}
-                    </div>
-                    <button class="flow-sug-add" data-index="${i}">
-                        ${this.currentTrack ? 'ADD' : 'PLAY'}
-                    </button>
-                </div>
-            `;
-        }).join('');
+            const card = document.createElement('div');
+            card.className = 'flow-suggestion-card';
+            card.dataset.index = i;
 
-        // Wire add/play buttons
-        container.querySelectorAll('.flow-sug-add').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                const track = items[idx];
+            const info = document.createElement('div');
+            info.className = 'flow-sug-info';
+            const titleEl = document.createElement('div');
+            titleEl.className = 'flow-sug-title';
+            titleEl.textContent = track.title || 'Unknown';
+            const artistEl = document.createElement('div');
+            artistEl.className = 'flow-sug-artist';
+            artistEl.textContent = track.artist || '';
+            info.appendChild(titleEl);
+            info.appendChild(artistEl);
+
+            const meta = document.createElement('div');
+            meta.className = 'flow-sug-meta';
+            const bpmSpan = document.createElement('span');
+            bpmSpan.textContent = track.bpm ? track.bpm + ' BPM' : '';
+            const keySpan = document.createElement('span');
+            keySpan.textContent = track.key || '';
+            meta.appendChild(bpmSpan);
+            meta.appendChild(keySpan);
+            for (const b of badges) {
+                const badge = document.createElement('span');
+                badge.className = `flow-badge flow-badge-${b.type}`;
+                badge.textContent = b.label;
+                meta.appendChild(badge);
+            }
+
+            const addBtn = document.createElement('button');
+            addBtn.className = 'flow-sug-add';
+            addBtn.dataset.index = i;
+            addBtn.textContent = this.currentTrack ? 'ADD' : 'PLAY';
+            addBtn.addEventListener('click', () => {
                 if (!track) return;
-
                 if (!this.currentTrack) {
-                    // First track — start playing
                     this.start(track);
                 } else {
                     this.addToQueue(track);
@@ -514,6 +565,11 @@ export class FlowMode {
                     this._updateUI();
                 }
             });
+
+            card.appendChild(info);
+            card.appendChild(meta);
+            card.appendChild(addBtn);
+            container.appendChild(card);
         });
     }
 }

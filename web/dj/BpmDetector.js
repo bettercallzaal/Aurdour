@@ -82,6 +82,55 @@ export class BpmDetector {
         const data = audioBuffer.getChannelData(0);
         const sampleRate = audioBuffer.sampleRate;
 
+        // Multi-segment analysis: analyze 3 segments and vote
+        const duration = data.length / sampleRate;
+        const segmentLength = Math.min(30, duration / 3); // 30s segments
+        const segments = [];
+
+        for (let s = 0; s < 3; s++) {
+            const startSec = Math.max(0, (duration * (s + 1) / 4) - segmentLength / 2);
+            const startSample = Math.floor(startSec * sampleRate);
+            const endSample = Math.min(startSample + Math.floor(segmentLength * sampleRate), data.length);
+            if (endSample - startSample < sampleRate * 5) continue; // skip segments < 5s
+            segments.push(data.slice(startSample, endSample));
+        }
+
+        if (segments.length === 0) segments.push(data);
+
+        // Detect BPM on each segment
+        const bpmResults = segments.map(seg => this._detectBPMSegment(seg, sampleRate));
+
+        // Multi-band analysis: also try with bandpass at 80-200Hz (kick drum range)
+        const kickFiltered = this._bandPassFilter(data, sampleRate, 60, 200);
+        const kickBpm = this._detectBPMSegment(kickFiltered, sampleRate);
+        bpmResults.push(kickBpm);
+
+        // Vote: group BPMs within ±2 BPM tolerance, pick largest group
+        const normalized = bpmResults.map(b => {
+            while (b > 180) b /= 2;
+            while (b < 60) b *= 2;
+            return Math.round(b * 10) / 10;
+        });
+
+        const groups = [];
+        for (const bpm of normalized) {
+            const existing = groups.find(g => Math.abs(g.center - bpm) <= 2);
+            if (existing) {
+                existing.values.push(bpm);
+                existing.center = existing.values.reduce((a, b) => a + b) / existing.values.length;
+            } else {
+                groups.push({ center: bpm, values: [bpm] });
+            }
+        }
+
+        groups.sort((a, b) => b.values.length - a.values.length);
+        const bestGroup = groups[0];
+        const bpm = Math.round(bestGroup.center * 10) / 10;
+
+        return bpm;
+    }
+
+    _detectBPMSegment(data, sampleRate) {
         // Downsample for efficiency
         const downsampleFactor = 4;
         const downsampled = new Float32Array(Math.floor(data.length / downsampleFactor));
@@ -104,7 +153,7 @@ export class BpmDetector {
             energy.push(sum / windowSize);
         }
 
-        // Onset detection (difference of energy)
+        // Onset detection (half-wave rectified difference)
         const onsets = [];
         for (let i = 1; i < energy.length; i++) {
             onsets.push(Math.max(0, energy[i] - energy[i - 1]));
@@ -117,28 +166,39 @@ export class BpmDetector {
         const minLag = Math.floor(energyRate * 60 / maxBPM);
         const maxLag = Math.floor(energyRate * 60 / minBPM);
 
-        let bestLag = minLag;
-        let bestCorr = -Infinity;
-
+        // Find top 3 correlation peaks for better disambiguation
+        const peaks = [];
         for (let lag = minLag; lag <= maxLag && lag < onsets.length; lag++) {
             let corr = 0;
-            const len = Math.min(onsets.length - lag, 1000);
+            const len = Math.min(onsets.length - lag, 2000);
             for (let i = 0; i < len; i++) {
                 corr += onsets[i] * onsets[i + lag];
             }
-            if (corr > bestCorr) {
-                bestCorr = corr;
-                bestLag = lag;
-            }
+            peaks.push({ lag, corr });
         }
 
-        let bpm = Math.round(energyRate * 60 / bestLag);
+        peaks.sort((a, b) => b.corr - a.corr);
+        const bestLag = peaks[0]?.lag || minLag;
 
-        // Normalize to 60-180 range
-        while (bpm > 180) bpm /= 2;
-        while (bpm < 60) bpm *= 2;
+        return energyRate * 60 / bestLag;
+    }
 
-        return Math.round(bpm * 10) / 10;
+    _bandPassFilter(data, sampleRate, lowCut, highCut) {
+        // Apply low-pass then high-pass
+        const lowPassed = this._lowPassFilter(data, sampleRate, highCut);
+        return this._highPassFilter(lowPassed, sampleRate, lowCut);
+    }
+
+    _highPassFilter(data, sampleRate, cutoff) {
+        const rc = 1.0 / (cutoff * 2 * Math.PI);
+        const dt = 1.0 / sampleRate;
+        const alpha = rc / (rc + dt);
+        const filtered = new Float32Array(data.length);
+        filtered[0] = data[0];
+        for (let i = 1; i < data.length; i++) {
+            filtered[i] = alpha * (filtered[i - 1] + data[i] - data[i - 1]);
+        }
+        return filtered;
     }
 
     _lowPassFilter(data, sampleRate, cutoff) {

@@ -1,13 +1,18 @@
 // Library.js — Track browser with LOCAL, LIKED, and AUDIUS tabs
 
+import { Toast } from './Toast.js';
+
 export class Library {
     constructor(onLoadTrack) {
         this.tracks = [];
         this.filteredTracks = [];
+        this.uploadedTracks = []; // local uploaded files from IndexedDB
         this.onLoadTrack = onLoadTrack; // callback(deckId, dataFilePath)
         this.onLoadDirect = null; // callback(deckId, streamUrl, meta) — set by player
+        this.onLoadLocalFile = null; // callback(deckId, trackId) — set by player
         this.onAddToQueue = null; // set by Setlist
         this.playlists = null; // set by player — Playlists instance for liked tracks
+        this.localFiles = null; // set by player — LocalFiles instance
         this.tableBody = document.getElementById('library-body');
         this.searchInput = document.getElementById('library-search');
         this.selectedIndex = -1;
@@ -24,6 +29,7 @@ export class Library {
         }
 
         this._initTabs();
+        this._initUploadButton();
     }
 
     _initTabs() {
@@ -36,6 +42,109 @@ export class Library {
                 this._onTabChange();
             });
         });
+    }
+
+    _initUploadButton() {
+        const header = document.querySelector('.library-header');
+        if (!header) return;
+
+        // Hidden file input
+        this._fileInput = document.createElement('input');
+        this._fileInput.type = 'file';
+        this._fileInput.accept = 'audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.opus,.webm';
+        this._fileInput.multiple = true;
+        this._fileInput.style.display = 'none';
+        this._fileInput.id = 'library-file-upload';
+        header.appendChild(this._fileInput);
+
+        // Upload button
+        const uploadBtn = document.createElement('button');
+        uploadBtn.className = 'btn-upload';
+        uploadBtn.id = 'library-upload-btn';
+        uploadBtn.title = 'Upload audio files';
+        uploadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <span>UPLOAD</span>`;
+
+        // Insert before the search input
+        const searchInput = header.querySelector('.library-search');
+        if (searchInput) {
+            header.insertBefore(uploadBtn, searchInput);
+        } else {
+            header.appendChild(uploadBtn);
+        }
+
+        // Drop zone overlay for the library area
+        const library = document.getElementById('library');
+        if (library) {
+            library.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                library.classList.add('library-drag-over');
+            });
+            library.addEventListener('dragleave', (e) => {
+                if (!library.contains(e.relatedTarget)) {
+                    library.classList.remove('library-drag-over');
+                }
+            });
+            library.addEventListener('drop', (e) => {
+                e.preventDefault();
+                library.classList.remove('library-drag-over');
+                if (e.dataTransfer.files.length > 0) {
+                    this._handleUploadedFiles(e.dataTransfer.files);
+                }
+            });
+        }
+
+        uploadBtn.addEventListener('click', () => this._fileInput.click());
+        this._fileInput.addEventListener('change', () => {
+            if (this._fileInput.files.length > 0) {
+                this._handleUploadedFiles(this._fileInput.files);
+                this._fileInput.value = '';
+            }
+        });
+    }
+
+    async _handleUploadedFiles(fileList) {
+        if (!this.localFiles) {
+            console.warn('[Library] LocalFiles not available');
+            return;
+        }
+
+        const uploadBtn = document.getElementById('library-upload-btn');
+        if (uploadBtn) {
+            uploadBtn.classList.add('uploading');
+            uploadBtn.querySelector('span').textContent = 'UPLOADING...';
+        }
+
+        try {
+            const newTracks = await this.localFiles.addFiles(fileList);
+            if (newTracks.length > 0) {
+                this.uploadedTracks = await this.localFiles.getAllTracks();
+                // Switch to local tab and re-render
+                this.activeTab = 'local';
+                document.querySelectorAll('.library-tab').forEach(t => {
+                    t.classList.toggle('active', t.dataset.tab === 'local');
+                });
+                this._filterAndRender();
+                Toast.success(`Uploaded ${newTracks.length} track${newTracks.length > 1 ? 's' : ''}`);
+            }
+        } catch (e) {
+            console.error('[Library] Upload failed:', e);
+            Toast.error('File upload failed');
+        }
+
+        if (uploadBtn) {
+            uploadBtn.classList.remove('uploading');
+            uploadBtn.querySelector('span').textContent = 'UPLOAD';
+        }
+    }
+
+    async _loadUploadedTracks() {
+        if (!this.localFiles) return;
+        try {
+            this.uploadedTracks = await this.localFiles.getAllTracks();
+        } catch (e) {
+            console.warn('[Library] Failed to load uploaded tracks:', e);
+        }
     }
 
     _onTabChange() {
@@ -83,6 +192,7 @@ export class Library {
             this._renderAudius(this.audiusTracks);
         } catch (e) {
             console.error('[Library] Audius search failed:', e);
+            Toast.error('Audius search failed — try again');
             this._renderError('Audius search failed. Try again.');
         }
     }
@@ -127,6 +237,10 @@ export class Library {
             if (this.onLoadDirect) {
                 this.onLoadDirect(deckId, track.streamUrl, track);
             }
+        } else if (track && track.source === 'local-upload') {
+            if (this.onLoadLocalFile) {
+                this.onLoadLocalFile(deckId, track._localId);
+            }
         } else if (track && track.dataFile) {
             this.onLoadTrack(deckId, track.dataFile);
         }
@@ -144,35 +258,31 @@ export class Library {
     }
 
     async loadManifest() {
+        // Load uploaded tracks from IndexedDB
+        await this._loadUploadedTracks();
+
         try {
             const resp = await fetch('data/manifest.json');
             const data = await resp.json();
             this.tracks = data.tracks || [];
-            this._filterAndRender();
         } catch (err) {
-            console.error('Failed to load manifest:', err);
-            if (this.tableBody) {
-                this.tableBody.textContent = '';
-                const row = document.createElement('tr');
-                const td = document.createElement('td');
-                td.colSpan = 7;
-                td.style.textAlign = 'center';
-                td.style.color = '#666';
-                td.textContent = 'No local tracks found. Try the AUDIUS tab to stream music.';
-                row.appendChild(td);
-                this.tableBody.appendChild(row);
-            }
+            console.warn('No manifest found, using uploaded tracks only');
+            this.tracks = [];
         }
+
+        this._filterAndRender();
     }
 
     _filterAndRender() {
         const query = (this.searchInput?.value || '').toLowerCase();
+        // Merge manifest tracks + uploaded tracks
+        const allTracks = [...this.uploadedTracks, ...this.tracks];
         this.filteredTracks = query
-            ? this.tracks.filter(t =>
+            ? allTracks.filter(t =>
                 (t.title || '').toLowerCase().includes(query) ||
                 (t.artist || '').toLowerCase().includes(query) ||
                 (t.genre || '').toLowerCase().includes(query))
-            : [...this.tracks];
+            : allTracks;
         this.selectedIndex = -1;
         this.selectedTrack = null;
         this._render(this.filteredTracks);
@@ -462,19 +572,36 @@ export class Library {
             const td = document.createElement('td');
             td.colSpan = 7;
             td.style.textAlign = 'center';
-            td.style.color = '#666';
-            td.textContent = 'No tracks';
+            td.style.color = '#555577';
+            td.style.padding = '20px';
+            td.innerHTML = 'No tracks found. <span style="color:#00d4ff;cursor:pointer" id="empty-upload-link">Upload audio files</span> or try the <span style="color:#c855f0">AUDIUS</span> tab.';
             row.appendChild(td);
             this.tableBody.appendChild(row);
+            // Wire the upload link
+            setTimeout(() => {
+                document.getElementById('empty-upload-link')?.addEventListener('click', () => {
+                    this._fileInput?.click();
+                });
+            }, 0);
             return;
         }
 
         tracks.forEach(track => {
+            const isUploaded = track.source === 'local-upload';
             const row = document.createElement('tr');
 
             const tdTitle = document.createElement('td');
             tdTitle.className = 'lib-title';
-            tdTitle.textContent = track.title || '-';
+            if (isUploaded) {
+                const badge = document.createElement('span');
+                badge.className = 'lib-upload-badge';
+                badge.textContent = '↑';
+                badge.title = 'Uploaded file';
+                tdTitle.appendChild(badge);
+            }
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = track.title || '-';
+            tdTitle.appendChild(titleSpan);
 
             const tdArtist = document.createElement('td');
             tdArtist.className = 'lib-artist';
@@ -497,17 +624,25 @@ export class Library {
 
             tdActions.appendChild(this._createHeartBtn(track));
 
+            const loadHandler = (deckId) => {
+                if (isUploaded && this.onLoadLocalFile) {
+                    this.onLoadLocalFile(deckId, track._localId);
+                } else if (track.dataFile) {
+                    this.onLoadTrack(deckId, track.dataFile);
+                }
+            };
+
             const btnA = document.createElement('button');
             btnA.className = 'btn-load btn-load-a';
             btnA.title = 'Load to Deck A';
             btnA.textContent = 'A';
-            btnA.addEventListener('click', () => this.onLoadTrack('A', track.dataFile));
+            btnA.addEventListener('click', () => loadHandler('A'));
 
             const btnB = document.createElement('button');
             btnB.className = 'btn-load btn-load-b';
             btnB.title = 'Load to Deck B';
             btnB.textContent = 'B';
-            btnB.addEventListener('click', () => this.onLoadTrack('B', track.dataFile));
+            btnB.addEventListener('click', () => loadHandler('B'));
 
             const btnQ = document.createElement('button');
             btnQ.className = 'btn-load';
@@ -517,6 +652,23 @@ export class Library {
             btnQ.addEventListener('click', () => {
                 if (this.onAddToQueue) this.onAddToQueue(track);
             });
+
+            // Delete button for uploaded tracks
+            if (isUploaded) {
+                const btnDel = document.createElement('button');
+                btnDel.className = 'btn-load btn-delete';
+                btnDel.title = 'Remove from library';
+                btnDel.textContent = '×';
+                btnDel.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (this.localFiles) {
+                        await this.localFiles.removeFile(track._localId);
+                        this.uploadedTracks = await this.localFiles.getAllTracks();
+                        this._filterAndRender();
+                    }
+                });
+                tdActions.appendChild(btnDel);
+            }
 
             tdActions.appendChild(btnA);
             tdActions.appendChild(btnB);
@@ -529,9 +681,7 @@ export class Library {
             row.appendChild(tdDuration);
             row.appendChild(tdActions);
 
-            row.addEventListener('dblclick', () => {
-                this.onLoadTrack(null, track.dataFile);
-            });
+            row.addEventListener('dblclick', () => loadHandler(null));
 
             this.tableBody.appendChild(row);
         });

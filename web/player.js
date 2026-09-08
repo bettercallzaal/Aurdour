@@ -28,6 +28,8 @@ import { PerfMonitor } from './dj/PerfMonitor.js';
 import { Settings } from './dj/Settings.js';
 import { FlowMode } from './dj/FlowMode.js';
 import { Audius } from './dj/Audius.js';
+import { LocalFiles } from './dj/LocalFiles.js';
+import { Toast } from './dj/Toast.js';
 
 class DJPlayer {
     constructor() {
@@ -77,6 +79,13 @@ class DJPlayer {
         // Flow Mode — auto-DJ for non-DJs
         this.flowMode = safeInit('FlowMode', () => new FlowMode(this));
 
+        // Local file uploads (IndexedDB persistence)
+        this.localFiles = safeInit('LocalFiles', () => new LocalFiles());
+        if (this.localFiles) {
+            this.library.localFiles = this.localFiles;
+            this.library.onLoadLocalFile = (deckId, trackId) => this._onLoadLocalFile(deckId, trackId);
+        }
+
         // Audius integration
         this.audius = safeInit('Audius', () => new Audius());
         if (this.audius) {
@@ -105,8 +114,10 @@ class DJPlayer {
         this._initMicControls();
         this._initSystemAudioControls();
         this._initGlobalToggles();
+        this._initZoomControls();
         this._initKeyboardShortcuts();
         this._initAudioContextResume();
+        this._initBeforeUnload();
         this._loadSettings();
 
         // Load library first — this is the most important thing to show
@@ -123,6 +134,10 @@ class DJPlayer {
             this._connectDeckAudio(deck);
             this.broadcast?.updateTrackInfo(deck.id, deck.metadata);
             this._updateHarmonicDisplay();
+
+            // Notify user of successful track load
+            const title = deck.metadata?.metadata?.title || 'Track';
+            Toast.success(`Deck ${deck.id}: Loaded "${title}"`);
 
             // Restore saved cue points
             const trackId = deck.getTrackId();
@@ -196,6 +211,7 @@ class DJPlayer {
         const mediaEl = deck.getMediaElement();
         if (!mediaEl) {
             console.error(`[AUDIO:PLAYER] Deck ${deck.id}: No media element found! Cannot connect audio.`);
+            Toast.error(`Deck ${deck.id}: No media element found`);
             return;
         }
 
@@ -204,15 +220,21 @@ class DJPlayer {
         console.log(`[AUDIO:PLAYER]   Already connected: ${this._audioConnected[deck.id]}`);
 
         try {
+            // connectDeckSource handles element reuse, fallback to captureStream, etc.
             this.audioRouter.connectDeckSource(deck.id, mediaEl);
             this._audioConnected[deck.id] = true;
+
+            // Re-apply current crossfader position so the new deck gets correct gain
+            const cf = document.getElementById('crossfader');
+            if (cf) this.audioRouter.setCrossfade(cf.value / 100);
+
             console.log(`[AUDIO:PLAYER]   Deck ${deck.id} audio connected successfully`);
         } catch (e) {
-            console.warn(`[AUDIO:PLAYER] Deck ${deck.id}: Audio routing issue:`, e.message);
-            if (e.message.includes('already been created')) {
-                console.log(`[AUDIO:PLAYER]   This is OK — the MediaElementSource was already created for this element. Audio should still work.`);
-                this._audioConnected[deck.id] = true;
-            }
+            console.error(`[AUDIO:PLAYER] Deck ${deck.id}: Audio connection failed:`, e.message);
+            Toast.error(`Deck ${deck.id}: Audio connection failed`);
+            // Even if routing fails, mark as connected so playback isn't blocked —
+            // audio will play through the element's default output
+            this._audioConnected[deck.id] = true;
         }
     }
 
@@ -253,8 +275,8 @@ class DJPlayer {
             const deckId = ch.toUpperCase();
             const deck = this.decks[deckId];
 
-            document.getElementById(`deck-${ch}-play`)?.addEventListener('click', () => {
-                this.audioRouter.resume();
+            document.getElementById(`deck-${ch}-play`)?.addEventListener('click', async () => {
+                await this.audioRouter.resume();
                 deck.playPause();
             });
 
@@ -502,6 +524,14 @@ class DJPlayer {
         }
     }
 
+    _initZoomControls() {
+        ['a', 'b'].forEach(ch => {
+            const deck = this.decks[ch.toUpperCase()];
+            document.getElementById(`zoom-${ch}-in`)?.addEventListener('click', () => deck.zoomIn());
+            document.getElementById(`zoom-${ch}-out`)?.addEventListener('click', () => deck.zoomOut());
+        });
+    }
+
     _initGlobalToggles() {
         // RGB waveform toggle
         const rgbBtn = document.getElementById('rgb-toggle');
@@ -572,8 +602,13 @@ class DJPlayer {
                     break;
                 case 'KeyR':
                     if (e.ctrlKey || e.metaKey) return;
-                    if (this.recorder.isRecording) this.recorder.stop();
-                    else this.recorder.start();
+                    if (this.recorder.isRecording) {
+                        this.recorder.stop();
+                        Toast.info('Recording stopped');
+                    } else {
+                        this.recorder.start();
+                        Toast.info('Recording started');
+                    }
                     break;
                 case 'KeyV':
                     if (this.visualizer.running) this.visualizer.stop();
@@ -635,6 +670,39 @@ class DJPlayer {
         );
     }
 
+    async _onLoadLocalFile(deckId, trackId) {
+        if (!deckId) {
+            deckId = !this.decks.A.isLoaded ? 'A' : (!this.decks.B.isLoaded ? 'B' : 'A');
+        }
+        const deck = this.decks[deckId];
+        if (!deck || !this.localFiles) return;
+
+        this.audioRouter.resume();
+        const audioUrl = await this.localFiles.getAudioUrl(trackId);
+        if (!audioUrl) {
+            console.error(`[PLAYER] Local file not found: ${trackId}`);
+            Toast.error('Local file not found — it may have been deleted');
+            return;
+        }
+
+        // Find track metadata from library's uploaded tracks
+        const tracks = await this.localFiles.getAllTracks();
+        const meta = tracks.find(t => t.id === trackId) || {};
+
+        deck.loadDirect(audioUrl, {
+            title: meta.title || 'Unknown',
+            artist: meta.artist || '',
+            bpm: meta.bpm || null,
+            key: meta.key || null,
+            source: 'local-upload',
+            id: trackId,
+        });
+
+        if (this.setlist) {
+            this.setlist.logPlay(meta.title || 'Unknown', meta.artist || '');
+        }
+    }
+
     _onLoadDirect(deckId, streamUrl, meta) {
         if (!deckId) {
             deckId = !this.decks.A.isLoaded ? 'A' : (!this.decks.B.isLoaded ? 'B' : 'A');
@@ -680,6 +748,23 @@ class DJPlayer {
                 volumeB: parseFloat(document.getElementById('vol-b')?.value || 80),
                 masterVolume: parseFloat(document.getElementById('master-volume')?.value || 80),
             };
+        });
+    }
+
+    _initBeforeUnload() {
+        window.addEventListener('beforeunload', (e) => {
+            // Warn if recording is in progress
+            if (this.recorder?.isRecording) {
+                e.preventDefault();
+                e.returnValue = 'Recording in progress. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+            // Warn if either deck is playing
+            if (this.decks.A?.isPlaying || this.decks.B?.isPlaying) {
+                e.preventDefault();
+                e.returnValue = 'Audio is still playing. Are you sure you want to leave?';
+                return e.returnValue;
+            }
         });
     }
 

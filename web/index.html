@@ -10,6 +10,10 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#00d4ff">
+    <link rel="icon" type="image/svg+xml" href="icon-192.svg">
+    <link rel="apple-touch-icon" href="icon-192.svg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -26,6 +30,7 @@
                 <button class="btn-toolbar" id="rec-btn" title="Record mix (R)">REC</button>
                 <span class="toolbar-text" id="rec-time">0:00</span>
                 <select class="toolbar-select" id="rec-format" title="Recording format">
+                    <option value="wav">WAV</option>
                     <option value="webm">WebM</option>
                     <option value="ogg">OGG</option>
                     <option value="mp4">M4A</option>
@@ -164,6 +169,11 @@
                 </div>
                 <div class="waveform-overview" id="deck-a-overview"></div>
                 <div class="waveform-main" id="deck-a-waveform"></div>
+                <div class="zoom-controls">
+                    <button class="btn-zoom" id="zoom-a-out" title="Zoom out (Ctrl+Scroll)">−</button>
+                    <span class="zoom-display" id="zoom-a-display">FIT</span>
+                    <button class="btn-zoom" id="zoom-a-in" title="Zoom in (Ctrl+Scroll)">+</button>
+                </div>
 
                 <!-- Pitch fader row (PRO) -->
                 <div class="pitch-row pro-only">
@@ -225,6 +235,11 @@
                             <option value="flanger">Flanger</option>
                             <option value="filter">Filter</option>
                             <option value="delay">Delay</option>
+                            <option value="phaser">Phaser</option>
+                            <option value="chorus">Chorus</option>
+                            <option value="bitcrusher">Bitcrusher</option>
+                            <option value="compressor">Compressor</option>
+                            <option value="distortion">Distortion</option>
                         </select>
                     </div>
                     <div class="fx-knobs">
@@ -384,6 +399,11 @@
                 </div>
                 <div class="waveform-overview" id="deck-b-overview"></div>
                 <div class="waveform-main" id="deck-b-waveform"></div>
+                <div class="zoom-controls">
+                    <button class="btn-zoom" id="zoom-b-out" title="Zoom out (Ctrl+Scroll)">−</button>
+                    <span class="zoom-display" id="zoom-b-display">FIT</span>
+                    <button class="btn-zoom" id="zoom-b-in" title="Zoom in (Ctrl+Scroll)">+</button>
+                </div>
 
                 <!-- Pitch fader row (PRO) -->
                 <div class="pitch-row pro-only">
@@ -445,6 +465,11 @@
                             <option value="flanger">Flanger</option>
                             <option value="filter">Filter</option>
                             <option value="delay">Delay</option>
+                            <option value="phaser">Phaser</option>
+                            <option value="chorus">Chorus</option>
+                            <option value="bitcrusher">Bitcrusher</option>
+                            <option value="compressor">Compressor</option>
+                            <option value="distortion">Distortion</option>
                         </select>
                     </div>
                     <div class="fx-knobs">

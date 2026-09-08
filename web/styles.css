@@ -757,6 +757,48 @@ body:not(.pro-mode) .waveform-main {
 }
 
 
+/* ===== Zoom Controls ===== */
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 3px 0;
+}
+
+.btn-zoom {
+    background: rgba(60, 60, 120, 0.2);
+    border: 1px solid rgba(60, 60, 120, 0.3);
+    color: var(--text-secondary);
+    width: 24px;
+    height: 20px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: bold;
+    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.btn-zoom:hover {
+    background: rgba(0, 212, 255, 0.1);
+    border-color: rgba(0, 212, 255, 0.3);
+    color: #00d4ff;
+}
+
+.zoom-display {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    min-width: 28px;
+    text-align: center;
+    letter-spacing: 0.05em;
+}
+
 /* ================================================================
    PITCH ROW
    ================================================================ */
@@ -1527,6 +1569,81 @@ body:not(.pro-mode) .bottom-row {
     opacity: 1;
 }
 
+
+/* ===== Upload Button ===== */
+
+.btn-upload {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: #00d4ff;
+    padding: 5px 14px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-upload:hover {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: rgba(0, 212, 255, 0.5);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+}
+
+.btn-upload.uploading {
+    color: #ffd54f;
+    border-color: rgba(255, 213, 79, 0.4);
+    background: rgba(255, 213, 79, 0.08);
+    pointer-events: none;
+}
+
+.btn-upload.uploading svg {
+    animation: uploadSpin 1s linear infinite;
+}
+
+@keyframes uploadSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.lib-upload-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0, 212, 255, 0.12);
+    color: #00d4ff;
+    font-size: 0.6rem;
+    font-weight: bold;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.btn-delete {
+    color: #ff4466 !important;
+    border-color: rgba(255, 68, 102, 0.3) !important;
+    font-size: 1rem !important;
+    line-height: 1;
+    padding: 0 4px !important;
+}
+
+.btn-delete:hover {
+    background: rgba(255, 68, 102, 0.15) !important;
+}
+
+.library-drag-over {
+    outline: 2px dashed #00d4ff;
+    outline-offset: -2px;
+    background: rgba(0, 212, 255, 0.03) !important;
+}
 
 /* ===== Heart / Like Button ===== */
 
@@ -2828,4 +2945,130 @@ body:not(.pro-mode) .bottom-row {
     .fx-knobs { gap: 12px; }
     .jog-wheel { width: 100px; height: 100px; }
     .beat-jump-btns .btn-mini { padding: 6px 10px; }
+}
+
+
+/* ================================================================
+   TOAST NOTIFICATIONS
+   ================================================================ */
+
+.toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    max-width: 380px;
+    width: 100%;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md, 10px);
+    background: #161628;
+    border: 1px solid rgba(60, 60, 120, 0.3);
+    color: var(--text-primary, #eaeaf2);
+    font-family: var(--font-ui, 'DM Sans', sans-serif);
+    font-size: 13px;
+    line-height: 1.4;
+    pointer-events: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(12px);
+}
+
+.toast-visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast-leaving {
+    transform: translateX(120%);
+    opacity: 0;
+}
+
+.toast-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.toast-message {
+    flex: 1;
+    min-width: 0;
+    word-wrap: break-word;
+}
+
+.toast-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--text-secondary, #9494b8);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.toast-close:hover {
+    opacity: 1;
+    color: var(--text-primary, #eaeaf2);
+}
+
+/* Toast type variants */
+.toast-success {
+    border-color: rgba(0, 255, 136, 0.3);
+    background: linear-gradient(135deg, #161628 0%, rgba(0, 255, 136, 0.06) 100%);
+}
+
+.toast-success .toast-icon {
+    background: rgba(0, 255, 136, 0.15);
+    color: #00ff88;
+}
+
+.toast-error {
+    border-color: rgba(255, 34, 0, 0.3);
+    background: linear-gradient(135deg, #161628 0%, rgba(255, 34, 0, 0.06) 100%);
+}
+
+.toast-error .toast-icon {
+    background: rgba(255, 34, 0, 0.15);
+    color: #ff4444;
+}
+
+.toast-warning {
+    border-color: rgba(255, 107, 53, 0.3);
+    background: linear-gradient(135deg, #161628 0%, rgba(255, 107, 53, 0.06) 100%);
+}
+
+.toast-warning .toast-icon {
+    background: rgba(255, 107, 53, 0.15);
+    color: var(--accent-b, #ff6b35);
+}
+
+.toast-info {
+    border-color: rgba(0, 212, 255, 0.3);
+    background: linear-gradient(135deg, #161628 0%, rgba(0, 212, 255, 0.06) 100%);
+}
+
+.toast-info .toast-icon {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent-a, #00d4ff);
 }

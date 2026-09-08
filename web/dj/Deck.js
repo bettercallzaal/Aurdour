@@ -1,5 +1,7 @@
 // Deck.js — Single deck: WaveSurfer instance, hot cues, loops, transport, stems
 
+import { Toast } from './Toast.js';
+
 export class Deck {
     constructor(id, waveformId, overviewId, options = {}) {
         this.id = id; // 'A' or 'B'
@@ -36,6 +38,14 @@ export class Deck {
         // RGB waveform
         this.rgbMode = false;
 
+        // Zoom
+        this.zoomLevel = 0; // 0 = fit-to-container (default), 1-5 = zoom levels
+
+        // Create a persistent <audio> element — prevents WaveSurfer from creating
+        // a new one on each load(), which breaks createMediaElementSource
+        this._audioElement = document.createElement('audio');
+        this._audioElement.crossOrigin = 'anonymous';
+
         this._initWaveSurfer(waveformId, overviewId);
     }
 
@@ -56,6 +66,7 @@ export class Deck {
 
         this.wavesurfer = WaveSurfer.create({
             container: `#${waveformId}`,
+            media: this._audioElement,
             waveColor: waveGradient,
             progressColor: progressGradient,
             cursorColor: '#ffffff',
@@ -91,8 +102,10 @@ export class Deck {
             this.isLoaded = true;
             this._buildBeatGrid();
 
-            // Set key lock
             const media = this.getMediaElement();
+            console.log(`[DECK:${this.id}] READY — duration=${this.wavesurfer.getDuration()?.toFixed(1)}s media.readyState=${media?.readyState} media.paused=${media?.paused} media.src=${media?.src?.substring(0, 60)}`);
+
+            // Set key lock
             if (media) media.preservesPitch = this.keyLock;
 
             if (this.onReady) {
@@ -143,6 +156,18 @@ export class Deck {
             this.isPlaying = false;
             if (this.onFinish) this.onFinish(this);
         });
+
+        // Scroll-wheel zoom on waveform container
+        const container = document.getElementById(waveformId);
+        if (container) {
+            container.addEventListener('wheel', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    if (e.deltaY < 0) this.zoomIn();
+                    else this.zoomOut();
+                }
+            }, { passive: false });
+        }
     }
 
     async loadTrack(jsonPath) {
@@ -157,6 +182,7 @@ export class Deck {
             this._updateDeckUI();
         } catch (error) {
             console.error(`Deck ${this.id}: Failed to load track:`, error);
+            Toast.error(`Deck ${this.id}: Failed to load track`);
         }
     }
 
@@ -180,6 +206,7 @@ export class Deck {
             this._updateDeckUI();
         } catch (error) {
             console.error(`Deck ${this.id}: Failed to load direct track:`, error);
+            Toast.error(`Deck ${this.id}: Failed to load track`);
         }
     }
 
@@ -208,7 +235,22 @@ export class Deck {
     }
 
     playPause() {
-        this.wavesurfer.playPause();
+        const media = this.getMediaElement();
+        console.log(`[DECK:${this.id}] playPause() — isLoaded=${this.isLoaded} isPlaying=${this.isPlaying} media.paused=${media?.paused} media.readyState=${media?.readyState} media.src=${media?.src?.substring(0, 60)}`);
+        try {
+            this.wavesurfer.playPause();
+        } catch (e) {
+            console.error(`[DECK:${this.id}] playPause error:`, e);
+            // Fallback: try playing the media element directly
+            if (media && media.paused) {
+                media.play().then(() => {
+                    console.log(`[DECK:${this.id}] Fallback media.play() succeeded`);
+                    this.isPlaying = true;
+                }).catch(err => {
+                    console.error(`[DECK:${this.id}] Fallback media.play() also failed:`, err);
+                });
+            }
+        }
     }
 
     // Serato-style CUE: playing → pause + return to cue; stopped → set cue
@@ -405,19 +447,18 @@ export class Deck {
     _quantizeTime(time) {
         if (!this.quantize || this.beatPositions.length === 0) return time;
 
-        // Find nearest beat
-        let closest = this.beatPositions[0];
-        let minDist = Math.abs(time - closest);
-
-        for (const beat of this.beatPositions) {
-            const dist = Math.abs(time - beat);
-            if (dist < minDist) {
-                minDist = dist;
-                closest = beat;
-            }
+        // Binary search for nearest beat (O(log n) instead of O(n))
+        const beats = this.beatPositions;
+        let lo = 0, hi = beats.length - 1;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (beats[mid] < time) lo = mid + 1;
+            else hi = mid;
         }
-
-        return closest;
+        if (lo > 0 && Math.abs(beats[lo - 1] - time) < Math.abs(beats[lo] - time)) {
+            return beats[lo - 1];
+        }
+        return beats[lo];
     }
 
     getNearestBeat(time) {
@@ -447,6 +488,40 @@ export class Deck {
                 waveColor: this.waveGradient,
                 progressColor: this.progressGradient,
             });
+        }
+    }
+
+    // ===== ZOOM =====
+
+    setZoom(level) {
+        this.zoomLevel = Math.max(0, Math.min(5, level));
+        // WaveSurfer zoom: minPxPerSec controls how many pixels per second of audio
+        // 0 = fit to container (default), higher = more zoomed in
+        const pxPerSecMap = [0, 50, 100, 200, 400, 800];
+        const pxPerSec = pxPerSecMap[this.zoomLevel];
+        if (pxPerSec === 0) {
+            // Reset to fit-to-container
+            this.wavesurfer.zoom(0);
+        } else {
+            this.wavesurfer.zoom(pxPerSec);
+        }
+        this._updateZoomUI();
+    }
+
+    zoomIn() {
+        this.setZoom(this.zoomLevel + 1);
+    }
+
+    zoomOut() {
+        this.setZoom(this.zoomLevel - 1);
+    }
+
+    _updateZoomUI() {
+        const ch = this.id.toLowerCase();
+        const zoomDisplay = document.getElementById(`zoom-${ch}-display`);
+        if (zoomDisplay) {
+            const labels = ['FIT', '2×', '4×', '8×', '16×', '32×'];
+            zoomDisplay.textContent = labels[this.zoomLevel];
         }
     }
 

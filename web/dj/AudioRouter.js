@@ -10,6 +10,7 @@ export class AudioRouter {
         this.ctx = new AudioContext();
         this.channels = {};
         this._sourceNodes = {};
+        this._sourceElements = {};
 
         ['A', 'B'].forEach(id => {
             // DJ-style filter (low-pass / high-pass sweep)
@@ -138,16 +139,44 @@ export class AudioRouter {
         console.log(`[AUDIO:ROUTER] connectDeckSource(${deckId}) — audioElement:`, audioElement?.tagName, `src="${audioElement?.src?.substring(0, 80)}..." paused=${audioElement?.paused}`);
         console.log(`[AUDIO:ROUTER]   AudioContext state: ${this.ctx.state} | sampleRate: ${this.ctx.sampleRate}`);
 
+        // If the same element is being reused (WaveSurfer v7 reuses <audio> on load()),
+        // do NOT disconnect/reconnect — the existing source node automatically routes
+        // audio from the element even when its src changes
+        if (this._sourceElements[deckId] === audioElement && this._sourceNodes[deckId]) {
+            console.log(`[AUDIO:ROUTER]   Same element for Deck ${deckId} — source already connected, skipping`);
+            return;
+        }
+
+        // Different element — disconnect old source and create new one
         if (this._sourceNodes[deckId]) {
             console.log(`[AUDIO:ROUTER]   Disconnecting previous source for Deck ${deckId}`);
             try {
                 this._sourceNodes[deckId].disconnect();
             } catch (e) { /* already disconnected */ }
         }
-        const source = this.ctx.createMediaElementSource(audioElement);
+
+        // Try createMediaElementSource first, fall back to captureStream
+        let source;
+        try {
+            source = this.ctx.createMediaElementSource(audioElement);
+            console.log(`[AUDIO:ROUTER]   Created MediaElementSource for Deck ${deckId}`);
+        } catch (e) {
+            console.warn(`[AUDIO:ROUTER]   createMediaElementSource failed for Deck ${deckId}:`, e.message);
+            // Fallback: use captureStream() → MediaStreamSource
+            try {
+                const stream = audioElement.captureStream ? audioElement.captureStream() : audioElement.mozCaptureStream();
+                source = this.ctx.createMediaStreamSource(stream);
+                console.log(`[AUDIO:ROUTER]   Fallback: using captureStream for Deck ${deckId}`);
+            } catch (e2) {
+                console.error(`[AUDIO:ROUTER]   Both source methods failed for Deck ${deckId}:`, e2.message);
+                return;
+            }
+        }
+
         this._sourceNodes[deckId] = source;
+        this._sourceElements[deckId] = audioElement;
         source.connect(this.channels[deckId].eqLow);
-        console.log(`[AUDIO:ROUTER]   Deck ${deckId} audio chain connected: MediaElementSource → EQ Low → EQ Mid → EQ High → ChannelGain → CrossfadeGain → Analyser → MasterGain → Destination`);
+        console.log(`[AUDIO:ROUTER]   Deck ${deckId} audio chain connected`);
         console.log(`[AUDIO:ROUTER]   Channel gains — channelGain: ${this.channels[deckId].channelGain.gain.value}, crossfadeGain: ${this.channels[deckId].crossfadeGain.gain.value}, masterGain: ${this.masterGain.gain.value}`);
     }
 
