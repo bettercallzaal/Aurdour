@@ -1,6 +1,4 @@
 {
-  "version": 2,
-  "public": true,
   "buildCommand": "echo 'No build required'",
   "outputDirectory": "web",
   "rewrites": [
